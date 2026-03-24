@@ -15,6 +15,9 @@ st.markdown(
     /* Hide default Streamlit elements */
     #MainMenu, footer, header { visibility: hidden; }
 
+    /* Hide auto-generated page nav (we use our own) */
+    [data-testid="stSidebarNav"] { display: none !important; }
+
     /* Sidebar */
     section[data-testid="stSidebar"] {
         background: #050505;
@@ -156,6 +159,8 @@ try:
         WHERE game_recency_rank = 1
           AND season = (SELECT MAX(season) FROM games WHERE game_type = '2')
           AND gp_season >= 20
+          AND player_first_name IS NOT NULL
+          AND player_last_name IS NOT NULL
         ORDER BY pts_zscore_5v20 DESC LIMIT 8
     """)
     df_cold = query("""
@@ -166,6 +171,8 @@ try:
         WHERE game_recency_rank = 1
           AND season = (SELECT MAX(season) FROM games WHERE game_type = '2')
           AND gp_season >= 20
+          AND player_first_name IS NOT NULL
+          AND player_last_name IS NOT NULL
         ORDER BY pts_zscore_5v20 ASC LIMIT 5
     """)
     db_ok = True

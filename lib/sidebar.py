@@ -82,6 +82,7 @@ def render() -> None:
         st.page_link("pages/5_Chat.py", label="AI Chat", icon=":material/chat:")
         st.page_link("pages/6_Screener.py", label="Screener", icon=":material/filter_list:")
         st.page_link("pages/7_Watchlist.py", label="My Hockey Room", icon=":material/folder_special:")
+        st.page_link("pages/8_Player_History.py", label="Player History", icon=":material/show_chart:")
 
         st.markdown(
             "<hr style='border-color:rgba(255,255,255,0.08);margin:20px 0;'>",

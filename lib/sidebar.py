@@ -66,7 +66,7 @@ def render() -> None:
         # ── Logo ──────────────────────────────────────────────────────────────
         st.markdown(
             """
-            <div style="padding: 8px 0 20px 0;">
+            <div style="margin-top:-24px; padding-bottom:20px;">
               <div style="color:#fff; font-weight:700; font-size:16px;
                           letter-spacing:-0.02em; line-height:1.2;">The Hockey Analytics</div>
             </div>

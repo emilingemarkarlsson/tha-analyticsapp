@@ -14,6 +14,57 @@ from lib.components import page_header, methodology_note, projection_disclaimer,
 st.set_page_config(page_title="Player History – THA Analytics", layout="wide")
 _render_sidebar()
 
+from lib.db import query
+from lib.components import tier_badge_html
+
+# ── Load top trending players (cached, shown on landing) ───────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def _top_trending() -> pd.DataFrame:
+    return query("""
+        SELECT DISTINCT CAST(player_id AS VARCHAR) AS player_id,
+               player_first_name || ' ' || player_last_name AS name,
+               team_abbr, position,
+               ROUND(pts_zscore_5v20, 2) AS z,
+               ROUND(pts_avg_5g, 2) AS pts5g
+        FROM player_rolling_stats
+        WHERE game_recency_rank = 1
+          AND season = (SELECT MAX(season) FROM games WHERE game_type = '2')
+          AND player_first_name IS NOT NULL
+          AND gp_season >= 15
+        ORDER BY pts_zscore_5v20 DESC
+        LIMIT 10
+    """)
+
+df_top = _top_trending()
+
+# ── Header ─────────────────────────────────────────────────────────────────────
+page_header("Player History", "Career trends · arc analysis · 3-season projection", data_date=get_data_date())
+
+# ── Top 10 trending quick-select ───────────────────────────────────────────────
+st.markdown(
+    "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
+    "letter-spacing:0.08em;color:#8896a8;margin-bottom:8px;'>Top 10 trending right now</p>",
+    unsafe_allow_html=True,
+)
+
+if not df_top.empty:
+    cols = st.columns(min(len(df_top), 5))
+    for i, (_, r) in enumerate(df_top.iterrows()):
+        col_idx = i % 5
+        with cols[col_idx]:
+            label = f"{r['name']}  ({r['team_abbr']} · {r['position']})"
+            if st.button(
+                f"{r['name']}\n{r['team_abbr']} · {r['position']}",
+                key=f"top_{r['player_id']}",
+                use_container_width=True,
+                help=f"PTS/5g: {r['pts5g']}  ·  Form: {r['z']:+.2f}σ",
+            ):
+                st.session_state["ph_search"] = r["name"]
+                st.session_state["ph_selected_id"] = r["player_id"]
+                st.rerun()
+
+st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+
 # ── Player search ──────────────────────────────────────────────────────────────
 search = st.text_input(
     "",
@@ -22,54 +73,79 @@ search = st.text_input(
     key="ph_search",
 )
 
-if not search or len(search) < 2:
-    st.markdown(
-        "<p style='color:#8896a8;font-size:13px;margin-top:16px;'>"
-        "Enter a player name to explore their full career history.</p>",
-        unsafe_allow_html=True,
-    )
-    st.stop()
+# Auto-select top trending player if no search and no explicit selection
+if (not search or len(search) < 2) and not st.session_state.get("ph_selected_id"):
+    if not df_top.empty:
+        top = df_top.iloc[0]
+        st.session_state["ph_search"] = top["name"]
+        st.session_state["ph_selected_id"] = top["player_id"]
+        st.rerun()
+    else:
+        st.info("Enter a player name to explore their full career history.")
+        st.stop()
 
-# Sanitise: keep only alphanumeric + spaces
-safe_search = "".join(c for c in search if c.isalnum() or c in " -'.")
-parts = safe_search.strip().split()
-# Multi-word queries use AND (all parts must match), single word uses OR on first/last name
-if len(parts) >= 2:
-    where_parts = " AND ".join(
-        f"LOWER(player_first_name || ' ' || player_last_name) LIKE LOWER('%{p}%')"
-        for p in parts
-    )
+# If we have a directly selected player ID (from top-10 buttons), use it
+if st.session_state.get("ph_selected_id") and (not search or len(search) < 2):
+    pid = st.session_state["ph_selected_id"]
+    try:
+        df_direct = query(f"""
+            SELECT DISTINCT CAST(player_id AS VARCHAR) AS player_id,
+                   player_first_name || ' ' || player_last_name AS name,
+                   team_abbr, position
+            FROM player_rolling_stats
+            WHERE game_recency_rank = 1 AND CAST(player_id AS VARCHAR) = '{pid}'
+            LIMIT 1
+        """)
+        if not df_direct.empty:
+            player_row = df_direct.iloc[0]
+            player_id = player_row["player_id"]
+            player_name = player_row["name"]
+            player_pos = player_row["position"]
+        else:
+            st.stop()
+    except Exception as e:
+        st.error(f"Error: {e}")
+        st.stop()
 else:
-    where_parts = (
-        f"LOWER(player_first_name) LIKE LOWER('%{parts[0]}%')"
-        f" OR LOWER(player_last_name) LIKE LOWER('%{parts[0]}%')"
-    )
+    # Sanitise: keep only alphanumeric + spaces
+    safe_search = "".join(c for c in search if c.isalnum() or c in " -'.")
+    parts = safe_search.strip().split()
+    if len(parts) >= 2:
+        where_parts = " AND ".join(
+            f"LOWER(player_first_name || ' ' || player_last_name) LIKE LOWER('%{p}%')"
+            for p in parts
+        )
+    else:
+        where_parts = (
+            f"LOWER(player_first_name) LIKE LOWER('%{parts[0]}%')"
+            f" OR LOWER(player_last_name) LIKE LOWER('%{parts[0]}%')"
+        )
 
-try:
-    df_search = query_fresh(f"""
-        SELECT DISTINCT CAST(player_id AS VARCHAR) AS player_id,
-               player_first_name || ' ' || player_last_name AS name,
-               team_abbr, position
-        FROM player_rolling_stats
-        WHERE game_recency_rank = 1
-          AND ({where_parts})
-        ORDER BY name
-        LIMIT 20
-    """)
-except Exception as e:
-    st.error(f"Search error: {e}")
-    st.stop()
+    try:
+        df_search = query_fresh(f"""
+            SELECT DISTINCT CAST(player_id AS VARCHAR) AS player_id,
+                   player_first_name || ' ' || player_last_name AS name,
+                   team_abbr, position
+            FROM player_rolling_stats
+            WHERE game_recency_rank = 1 AND ({where_parts})
+            ORDER BY name LIMIT 20
+        """)
+    except Exception as e:
+        st.error(f"Search error: {e}")
+        st.stop()
 
-if df_search.empty:
-    st.info("No active players found. Try a different name.")
-    st.stop()
+    if df_search.empty:
+        st.info("No active players found. Try a different name.")
+        st.stop()
 
-options = {f"{r['name']}  ({r['team_abbr']} · {r['position']})": r for _, r in df_search.iterrows()}
-chosen_label = st.selectbox("", list(options.keys()), label_visibility="collapsed", key="ph_player")
-player_row = options[chosen_label]
-player_id = player_row["player_id"]
-player_name = player_row["name"]
-player_pos = player_row["position"]
+    options = {f"{r['name']}  ({r['team_abbr']} · {r['position']})": r for _, r in df_search.iterrows()}
+    chosen_label = st.selectbox("", list(options.keys()), label_visibility="collapsed", key="ph_player")
+    pr = options[chosen_label]
+    player_id = pr["player_id"]
+    player_name = pr["name"]
+    player_pos = pr["position"]
+    # Clear direct-selection so search takes over
+    st.session_state.pop("ph_selected_id", None)
 
 # ── Load career data ───────────────────────────────────────────────────────────
 try:
@@ -140,7 +216,7 @@ if len(fit_df) >= 3:
 
 has_projection = len(proj_years) > 0
 
-# ── Page header ───────────────────────────────────────────────────────────────
+# ── Player section header ──────────────────────────────────────────────────────
 seasons_count = len(df)
 career_pts = int(df["points"].sum())
 career_gp = int(df["gp"].sum())
@@ -148,10 +224,11 @@ peak_pts82 = float(df["pts_per_82"].max())
 peak_season = df.loc[df["pts_per_82"].idxmax(), "season_label"]
 latest_cpi = float(df["cpi"].iloc[-1])
 
-page_header(
-    player_name,
-    f"{player_row['team_abbr']} · {player_pos} · {seasons_count} NHL seasons",
-    data_date=get_data_date(),
+st.markdown(
+    f"<h2 style='font-size:22px;font-weight:900;letter-spacing:-0.02em;margin:4px 0 2px;'>{player_name}</h2>"
+    f"<p style='color:#8896a8;font-size:13px;margin-bottom:16px;'>"
+    f"{player_pos} · {seasons_count} NHL seasons</p>",
+    unsafe_allow_html=True,
 )
 
 # Career summary bar

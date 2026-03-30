@@ -32,10 +32,17 @@ if not search or len(search) < 2:
 # Sanitise: keep only alphanumeric + spaces
 safe_search = "".join(c for c in search if c.isalnum() or c in " -'.")
 parts = safe_search.strip().split()
-where_parts = " OR ".join(
-    f"LOWER(player_first_name || ' ' || player_last_name) LIKE LOWER('%{p}%')"
-    for p in parts
-)
+# Multi-word queries use AND (all parts must match), single word uses OR on first/last name
+if len(parts) >= 2:
+    where_parts = " AND ".join(
+        f"LOWER(player_first_name || ' ' || player_last_name) LIKE LOWER('%{p}%')"
+        for p in parts
+    )
+else:
+    where_parts = (
+        f"LOWER(player_first_name) LIKE LOWER('%{parts[0]}%')"
+        f" OR LOWER(player_last_name) LIKE LOWER('%{parts[0]}%')"
+    )
 
 try:
     df_search = query_fresh(f"""
@@ -240,7 +247,7 @@ fig_arc.update_layout(
     showlegend=True,
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                 font=dict(size=10), bgcolor="rgba(0,0,0,0)"),
-    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
+    xaxis=dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
     yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), title="CPI"),
 )
 st.plotly_chart(fig_arc, use_container_width=True, config={"displayModeBar": False})
@@ -260,7 +267,7 @@ _CHART_LAYOUT = dict(
     showlegend=True,
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                 font=dict(size=10), bgcolor="rgba(0,0,0,0)"),
-    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-35),
+    xaxis=dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-35),
     yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
 )
 
@@ -336,13 +343,13 @@ with tab_pts:
         hovertemplate="<b>%{x}</b><br>GP: %{y}<extra></extra>",
     ))
     fig_gp.add_hline(y=82, line_dash="dot", line_color="rgba(255,255,255,0.15)")
-    fig_gp.update_layout(
-        **dict(**_CHART_LAYOUT, height=100),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9),
-                   range=[0, 90], title="GP"),
-        showlegend=False,
-        margin=dict(l=0, r=0, t=4, b=30),
-    )
+    gp_layout = {**_CHART_LAYOUT}
+    gp_layout["height"] = 100
+    gp_layout["showlegend"] = False
+    gp_layout["margin"] = dict(l=0, r=0, t=4, b=30)
+    gp_layout["xaxis"] = dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), tickangle=-35)
+    gp_layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), range=[0, 90], title="GP")
+    fig_gp.update_layout(**gp_layout)
     st.plotly_chart(fig_gp, use_container_width=True, config={"displayModeBar": False})
     st.markdown(
         "<p style='color:#8896a8;font-size:10px;margin-top:-8px;'>"
@@ -381,12 +388,13 @@ with tab_toi:
         name="Total TOI (hours)", marker_color="#87ceeb", opacity=0.5,
         hovertemplate="<b>%{x}</b><br>Total TOI: %{y:.1f}h<extra></extra>",
     ))
-    fig_toi_h.update_layout(
-        **dict(**_CHART_LAYOUT, height=100),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), title="Hours"),
-        showlegend=False,
-        margin=dict(l=0, r=0, t=4, b=30),
-    )
+    toi_h_layout = {**_CHART_LAYOUT}
+    toi_h_layout["height"] = 100
+    toi_h_layout["showlegend"] = False
+    toi_h_layout["margin"] = dict(l=0, r=0, t=4, b=30)
+    toi_h_layout["xaxis"] = dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), tickangle=-35)
+    toi_h_layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), title="Hours")
+    fig_toi_h.update_layout(**toi_h_layout)
     st.plotly_chart(fig_toi_h, use_container_width=True, config={"displayModeBar": False})
     st.markdown(
         f"<p style='color:#8896a8;font-size:10px;margin-top:-8px;'>"
@@ -424,7 +432,7 @@ with tab_eff:
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     font=dict(size=10), bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-35),
+        xaxis=dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-35),
     )
     fig_eff.update_yaxes(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10),
                           title_text="P/60", secondary_y=False)

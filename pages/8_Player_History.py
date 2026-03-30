@@ -373,13 +373,6 @@ fig_arc.update_layout(
 st.plotly_chart(fig_arc, use_container_width=True, config={"displayModeBar": False})
 projection_disclaimer()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SUBTABS
-# ═══════════════════════════════════════════════════════════════════════════════
-tab_pts, tab_toi, tab_eff, tab_table = st.tabs(
-    ["Points", "Ice Time", "Efficiency (P/60)", "Season Table"]
-)
-
 _CHART_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     font_color="#8896a8", font_size=11,
@@ -392,325 +385,313 @@ _CHART_LAYOUT = dict(
     yaxis=dict(gridcolor="rgba(255,255,255,0.06)", tickfont=dict(size=10)),
 )
 
-# ── Tab: Points ───────────────────────────────────────────────────────────────
-with tab_pts:
-    fig_pts = go.Figure()
+# ── Points ────────────────────────────────────────────────────────────────────
+st.markdown(
+    "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
+    "letter-spacing:0.08em;color:#8896a8;margin:24px 0 6px;'>Goals · Assists · Points pace</p>",
+    unsafe_allow_html=True,
+)
 
-    # Projection zone
-    if has_projection and proj_labels:
-        fig_pts.add_vrect(
-            x0=proj_labels[0], x1=proj_labels[-1],
-            fillcolor="rgba(249,115,22,0.05)", line_width=0,
-            annotation_text="PROJECTION", annotation_position="top left",
-            annotation_font=dict(size=9, color="rgba(249,115,22,0.5)"),
-        )
+fig_pts = go.Figure()
 
-    # Stacked G/A bars
-    fig_pts.add_trace(go.Bar(
-        x=df["season_label"], y=df["goals"],
-        name="Goals", marker_color="#c41e3a", opacity=0.85,
-        hovertemplate="<b>%{x}</b><br>Goals: %{y:.0f}<extra></extra>",
-    ))
-    fig_pts.add_trace(go.Bar(
-        x=df["season_label"], y=df["assists"],
-        name="Assists", marker_color="#87ceeb", opacity=0.65,
-        hovertemplate="<b>%{x}</b><br>Assists: %{y:.0f}<extra></extra>",
-    ))
-
-    # PTS/82 line on secondary axis
-    if has_projection:
-        # Confidence band
-        fig_pts.add_trace(go.Scatter(
-            x=proj_labels + proj_labels[::-1],
-            y=proj_upper + proj_lower[::-1],
-            fill="toself", fillcolor="rgba(249,115,22,0.10)",
-            line=dict(color="rgba(249,115,22,0)"),
-            showlegend=False, hoverinfo="skip",
-        ))
-        fig_pts.add_trace(go.Scatter(
-            x=proj_labels, y=proj_pts82,
-            name="Projected PTS/82",
-            mode="lines+markers",
-            line=dict(color="#f97316", width=1.8, dash="dash"),
-            marker=dict(size=5, color="#f97316", symbol="circle-open"),
-            yaxis="y2",
-            hovertemplate="<b>%{x}</b><br>Projected: %{y:.0f} PTS/82<extra></extra>",
-        ))
-
-    fig_pts.add_trace(go.Scatter(
-        x=df["season_label"], y=df["pts_per_82"],
-        name="PTS/82",
-        mode="lines+markers",
-        line=dict(color="#f97316", width=2.2),
-        marker=dict(size=7, color="#f97316", line=dict(width=1.5, color="#0a0a0a")),
-        yaxis="y2",
-        hovertemplate="<b>%{x}</b><br>PTS/82: %{y:.0f}<extra></extra>",
-    ))
-
-    # Annotate peak PTS/82 season
-    peak_pts82_idx = df["pts_per_82"].idxmax()
-    fig_pts.add_annotation(
-        x=df.loc[peak_pts82_idx, "season_label"],
-        y=float(df.loc[peak_pts82_idx, "pts_per_82"]),
-        text=f"Peak {peak_pts82:.0f} PTS/82",
-        showarrow=True, arrowhead=2, arrowwidth=1.5,
-        arrowcolor="#f97316", ax=0, ay=-32,
-        font=dict(size=10, color="#f97316"),
-        bgcolor="rgba(15,15,15,0.8)", bordercolor="#f97316",
-        borderwidth=1, borderpad=4, yref="y2",
-    )
-
-    layout_pts = dict(**_CHART_LAYOUT)
-    layout_pts["barmode"] = "stack"
-    layout_pts["yaxis2"] = dict(
-        overlaying="y", side="right",
-        gridcolor="rgba(255,255,255,0)", tickfont=dict(size=10, color="#f97316"),
-        title=dict(text="PTS/82", font=dict(color="#f97316")),
-    )
-    layout_pts["yaxis"]["title"] = "G + A"
-    fig_pts.update_layout(**layout_pts)
-    st.plotly_chart(fig_pts, use_container_width=True, config={"displayModeBar": False})
-
-    # GP availability bar
-    low_gp_seasons = df[df["gp"] < 50]
-    fig_gp = go.Figure(go.Bar(
-        x=df["season_label"], y=df["gp"],
-        marker_color=[
-            "#5a8f4e" if g >= 70 else ("#f97316" if g >= 50 else "#c41e3a")
-            for g in df["gp"]
-        ],
-        opacity=0.8,
-        hovertemplate="<b>%{x}</b><br>GP: %{y}<extra></extra>",
-    ))
-    fig_gp.add_hline(y=82, line_dash="dot", line_color="rgba(255,255,255,0.15)",
-                     annotation_text="Full season", annotation_font_size=9,
-                     annotation_font_color="rgba(255,255,255,0.3)")
-    # Annotate notable missed-time seasons
-    for _, row in low_gp_seasons.iterrows():
-        fig_gp.add_annotation(
-            x=row["season_label"], y=int(row["gp"]),
-            text=f"{int(row['gp'])} GP",
-            showarrow=False, yanchor="bottom",
-            font=dict(size=9, color="#c41e3a"),
-        )
-    gp_layout = {**_CHART_LAYOUT}
-    gp_layout["height"] = 130
-    gp_layout["showlegend"] = False
-    gp_layout["margin"] = dict(l=0, r=0, t=4, b=30)
-    gp_layout["xaxis"] = dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), tickangle=-35)
-    gp_layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), range=[0, 90], title="GP")
-    fig_gp.update_layout(**gp_layout)
-    st.plotly_chart(fig_gp, use_container_width=True, config={"displayModeBar": False})
-    st.markdown(
-        "<p style='color:#8896a8;font-size:10px;margin-top:-8px;'>"
-        "Green = 70+ GP (full season) · Orange = 50–69 GP · Red = &lt;50 GP (injury / shortened season)</p>",
-        unsafe_allow_html=True,
-    )
-
-# ── Tab: Ice Time ─────────────────────────────────────────────────────────────
-with tab_toi:
-    fig_toi = go.Figure()
-
-    # Elite deployment reference (top-pair D / top-line F)
-    elite_toi = 26.0 if player_pos == "D" else 21.0
-    fig_toi.add_hrect(
-        y0=toi_baseline, y1=elite_toi,
-        fillcolor="rgba(90,143,78,0.04)", line_width=0,
-    )
-    fig_toi.add_hline(
-        y=elite_toi,
-        line_dash="dot", line_color="rgba(90,143,78,0.35)",
-        annotation_text=f"Elite deployment ({elite_toi:.0f}min)",
-        annotation_font_size=9, annotation_font_color="rgba(90,143,78,0.7)",
-        annotation_position="top right",
-    )
-    fig_toi.add_hline(
-        y=toi_baseline,
-        line_dash="dot", line_color="rgba(255,255,255,0.20)",
-        annotation_text=f"Position avg ({toi_baseline:.0f}min)",
-        annotation_font_size=9, annotation_font_color="#8896a8",
-        annotation_position="bottom right",
-    )
-
-    fig_toi.add_trace(go.Scatter(
-        x=df["season_label"], y=df["avg_toi_min"],
-        name="TOI / game",
-        mode="lines+markers",
-        line=dict(color="#87ceeb", width=2.5),
-        marker=dict(size=7, color="#87ceeb", line=dict(width=1.5, color="#0a0a0a")),
-        fill="tozeroy", fillcolor="rgba(135,206,235,0.07)",
-        hovertemplate="<b>%{x}</b><br>TOI: %{y:.1f} min/game<extra></extra>",
-    ))
-
-    # Annotate seasons with significant TOI drop (>3 min below prev season)
-    toi_vals = df["avg_toi_min"].values
-    toi_lbls = df["season_label"].values
-    for i in range(1, len(toi_vals)):
-        drop = toi_vals[i - 1] - toi_vals[i]
-        if drop >= 3.0:
-            fig_toi.add_annotation(
-                x=toi_lbls[i], y=toi_vals[i],
-                text=f"−{drop:.1f}min",
-                showarrow=True, arrowhead=2, arrowwidth=1.2,
-                arrowcolor="#c41e3a", ax=0, ay=28,
-                font=dict(size=9, color="#c41e3a"),
-                bgcolor="rgba(15,15,15,0.75)", bordercolor="#c41e3a",
-                borderwidth=1, borderpad=3,
-            )
-
-    layout_toi = dict(**_CHART_LAYOUT)
-    layout_toi["yaxis"]["title"] = "Minutes / game"
-    layout_toi["yaxis"]["rangemode"] = "tozero"
-    fig_toi.update_layout(**layout_toi)
-    st.plotly_chart(fig_toi, use_container_width=True, config={"displayModeBar": False})
-    st.markdown(
-        f"<p style='color:#8896a8;font-size:10px;margin-top:-8px;'>"
-        f"Green band = above-average deployment zone · Red annotations = significant drop in ice time (&gt;3 min vs prior season)</p>",
-        unsafe_allow_html=True,
-    )
-
-# ── Tab: Efficiency P/60 ──────────────────────────────────────────────────────
-with tab_eff:
-    # Position-specific benchmarks
-    p60_elite = 2.5 if player_pos in ("C","L","R") else 1.5
-    p60_avg   = 1.6 if player_pos in ("C","L","R") else 0.8
-    p60_label = "forward" if player_pos in ("C","L","R") else "defenceman"
-
-    fig_eff = go.Figure()
-
-    # Benchmark zones
-    fig_eff.add_hrect(
-        y0=p60_elite, y1=p60_elite * 1.8,
+# Projection zone
+if has_projection and proj_labels:
+    fig_pts.add_vrect(
+        x0=proj_labels[0], x1=proj_labels[-1],
         fillcolor="rgba(249,115,22,0.05)", line_width=0,
-    )
-    fig_eff.add_hrect(
-        y0=p60_avg, y1=p60_elite,
-        fillcolor="rgba(90,143,78,0.04)", line_width=0,
-    )
-    fig_eff.add_hline(
-        y=p60_elite,
-        line_dash="dot", line_color="rgba(249,115,22,0.5)",
-        annotation_text=f"Elite {p60_label} ({p60_elite} P/60)",
-        annotation_font_size=9, annotation_font_color="rgba(249,115,22,0.8)",
-        annotation_position="top right",
-    )
-    fig_eff.add_hline(
-        y=p60_avg,
-        line_dash="dot", line_color="rgba(255,255,255,0.2)",
-        annotation_text=f"NHL avg ({p60_avg} P/60)",
-        annotation_font_size=9, annotation_font_color="#8896a8",
-        annotation_position="bottom right",
+        annotation_text="PROJECTION", annotation_position="top left",
+        annotation_font=dict(size=9, color="rgba(249,115,22,0.5)"),
     )
 
-    fig_eff.add_trace(go.Scatter(
-        x=df["season_label"], y=df["p60"].round(2),
-        name="P/60",
+# Stacked G/A bars
+fig_pts.add_trace(go.Bar(
+    x=df["season_label"], y=df["goals"],
+    name="Goals", marker_color="#c41e3a", opacity=0.85,
+    hovertemplate="<b>%{x}</b><br>Goals: %{y:.0f}<extra></extra>",
+))
+fig_pts.add_trace(go.Bar(
+    x=df["season_label"], y=df["assists"],
+    name="Assists", marker_color="#87ceeb", opacity=0.65,
+    hovertemplate="<b>%{x}</b><br>Assists: %{y:.0f}<extra></extra>",
+))
+
+# PTS/82 line on secondary axis
+if has_projection:
+    fig_pts.add_trace(go.Scatter(
+        x=proj_labels + proj_labels[::-1],
+        y=proj_upper + proj_lower[::-1],
+        fill="toself", fillcolor="rgba(249,115,22,0.10)",
+        line=dict(color="rgba(249,115,22,0)"),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig_pts.add_trace(go.Scatter(
+        x=proj_labels, y=proj_pts82,
+        name="Projected PTS/82",
         mode="lines+markers",
-        line=dict(color="#5a8f4e", width=2.5),
-        marker=dict(size=7, color="#5a8f4e", line=dict(width=1.5, color="#0a0a0a")),
-        fill="tozeroy", fillcolor="rgba(90,143,78,0.09)",
-        hovertemplate="<b>%{x}</b><br>P/60: %{y:.2f}<extra></extra>",
+        line=dict(color="#f97316", width=1.8, dash="dash"),
+        marker=dict(size=5, color="#f97316", symbol="circle-open"),
+        yaxis="y2",
+        hovertemplate="<b>%{x}</b><br>Projected: %{y:.0f} PTS/82<extra></extra>",
     ))
 
-    # Annotate career-best P/60 season
-    peak_p60_idx = df["p60"].idxmax()
-    peak_p60_val = float(df.loc[peak_p60_idx, "p60"])
-    fig_eff.add_annotation(
-        x=df.loc[peak_p60_idx, "season_label"], y=peak_p60_val,
-        text=f"Career best {peak_p60_val:.2f}",
-        showarrow=True, arrowhead=2, arrowwidth=1.5,
-        arrowcolor="#5a8f4e", ax=0, ay=-36,
-        font=dict(size=10, color="#5a8f4e"),
-        bgcolor="rgba(15,15,15,0.8)", bordercolor="#5a8f4e",
-        borderwidth=1, borderpad=4,
+fig_pts.add_trace(go.Scatter(
+    x=df["season_label"], y=df["pts_per_82"],
+    name="PTS/82",
+    mode="lines+markers",
+    line=dict(color="#f97316", width=2.2),
+    marker=dict(size=7, color="#f97316", line=dict(width=1.5, color="#0a0a0a")),
+    yaxis="y2",
+    hovertemplate="<b>%{x}</b><br>PTS/82: %{y:.0f}<extra></extra>",
+))
+
+# Annotate peak PTS/82 season
+peak_pts82_idx = df["pts_per_82"].idxmax()
+fig_pts.add_annotation(
+    x=df.loc[peak_pts82_idx, "season_label"],
+    y=float(df.loc[peak_pts82_idx, "pts_per_82"]),
+    text=f"Peak {peak_pts82:.0f} PTS/82",
+    showarrow=True, arrowhead=2, arrowwidth=1.5,
+    arrowcolor="#f97316", ax=0, ay=-32,
+    font=dict(size=10, color="#f97316"),
+    bgcolor="rgba(15,15,15,0.8)", bordercolor="#f97316",
+    borderwidth=1, borderpad=4, yref="y2",
+)
+
+layout_pts = dict(**_CHART_LAYOUT)
+layout_pts["barmode"] = "stack"
+layout_pts["yaxis2"] = dict(
+    overlaying="y", side="right",
+    gridcolor="rgba(255,255,255,0)", tickfont=dict(size=10, color="#f97316"),
+    title=dict(text="PTS/82", font=dict(color="#f97316")),
+)
+layout_pts["yaxis"]["title"] = "G + A"
+fig_pts.update_layout(**layout_pts)
+st.plotly_chart(fig_pts, use_container_width=True, config={"displayModeBar": False})
+
+# GP availability bar
+low_gp_seasons = df[df["gp"] < 50]
+fig_gp = go.Figure(go.Bar(
+    x=df["season_label"], y=df["gp"],
+    marker_color=[
+        "#5a8f4e" if g >= 70 else ("#f97316" if g >= 50 else "#c41e3a")
+        for g in df["gp"]
+    ],
+    opacity=0.8,
+    hovertemplate="<b>%{x}</b><br>GP: %{y}<extra></extra>",
+))
+fig_gp.add_hline(y=82, line_dash="dot", line_color="rgba(255,255,255,0.15)",
+                 annotation_text="Full season", annotation_font_size=9,
+                 annotation_font_color="rgba(255,255,255,0.3)")
+for _, row in low_gp_seasons.iterrows():
+    fig_gp.add_annotation(
+        x=row["season_label"], y=int(row["gp"]),
+        text=f"{int(row['gp'])} GP",
+        showarrow=False, yanchor="bottom",
+        font=dict(size=9, color="#c41e3a"),
+    )
+gp_layout = {**_CHART_LAYOUT}
+gp_layout["height"] = 130
+gp_layout["showlegend"] = False
+gp_layout["margin"] = dict(l=0, r=0, t=4, b=30)
+gp_layout["xaxis"] = dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), tickangle=-35)
+gp_layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9), range=[0, 90], title="GP")
+fig_gp.update_layout(**gp_layout)
+st.plotly_chart(fig_gp, use_container_width=True, config={"displayModeBar": False})
+st.markdown(
+    "<p style='color:#8896a8;font-size:10px;margin-top:-8px;'>"
+    "Green = 70+ GP (full season) · Orange = 50–69 GP · Red = &lt;50 GP (injury / shortened season)</p>",
+    unsafe_allow_html=True,
+)
+
+# ── Ice Time ───────────────────────────────────────────────────────────────────
+st.markdown(
+    "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
+    "letter-spacing:0.08em;color:#8896a8;margin:28px 0 6px;'>Ice Time · Deployment</p>",
+    unsafe_allow_html=True,
+)
+
+elite_toi = 26.0 if player_pos == "D" else 21.0
+fig_toi = go.Figure()
+fig_toi.add_hrect(y0=toi_baseline, y1=elite_toi, fillcolor="rgba(90,143,78,0.04)", line_width=0)
+fig_toi.add_hline(
+    y=elite_toi, line_dash="dot", line_color="rgba(90,143,78,0.35)",
+    annotation_text=f"Elite deployment ({elite_toi:.0f}min)",
+    annotation_font_size=9, annotation_font_color="rgba(90,143,78,0.7)",
+    annotation_position="top right",
+)
+fig_toi.add_hline(
+    y=toi_baseline, line_dash="dot", line_color="rgba(255,255,255,0.20)",
+    annotation_text=f"Position avg ({toi_baseline:.0f}min)",
+    annotation_font_size=9, annotation_font_color="#8896a8",
+    annotation_position="bottom right",
+)
+fig_toi.add_trace(go.Scatter(
+    x=df["season_label"], y=df["avg_toi_min"],
+    name="TOI / game",
+    mode="lines+markers",
+    line=dict(color="#87ceeb", width=2.5),
+    marker=dict(size=7, color="#87ceeb", line=dict(width=1.5, color="#0a0a0a")),
+    fill="tozeroy", fillcolor="rgba(135,206,235,0.07)",
+    hovertemplate="<b>%{x}</b><br>TOI: %{y:.1f} min/game<extra></extra>",
+))
+toi_vals = df["avg_toi_min"].values
+toi_lbls = df["season_label"].values
+for i in range(1, len(toi_vals)):
+    drop = toi_vals[i - 1] - toi_vals[i]
+    if drop >= 3.0:
+        fig_toi.add_annotation(
+            x=toi_lbls[i], y=toi_vals[i],
+            text=f"−{drop:.1f}min",
+            showarrow=True, arrowhead=2, arrowwidth=1.2,
+            arrowcolor="#c41e3a", ax=0, ay=28,
+            font=dict(size=9, color="#c41e3a"),
+            bgcolor="rgba(15,15,15,0.75)", bordercolor="#c41e3a",
+            borderwidth=1, borderpad=3,
+        )
+layout_toi = dict(**_CHART_LAYOUT)
+layout_toi["yaxis"]["title"] = "Minutes / game"
+layout_toi["yaxis"]["rangemode"] = "tozero"
+fig_toi.update_layout(**layout_toi)
+st.plotly_chart(fig_toi, use_container_width=True, config={"displayModeBar": False})
+st.markdown(
+    f"<p style='color:#8896a8;font-size:10px;margin-top:-8px;'>"
+    f"Green band = above-average deployment zone · Red = significant TOI drop (&gt;3 min vs prior season)</p>",
+    unsafe_allow_html=True,
+)
+
+# ── Efficiency P/60 ───────────────────────────────────────────────────────────
+st.markdown(
+    "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
+    "letter-spacing:0.08em;color:#8896a8;margin:28px 0 6px;'>Scoring Efficiency · P/60</p>",
+    unsafe_allow_html=True,
+)
+
+p60_elite = 2.5 if player_pos in ("C","L","R") else 1.5
+p60_avg   = 1.6 if player_pos in ("C","L","R") else 0.8
+p60_label = "forward" if player_pos in ("C","L","R") else "defenceman"
+
+fig_eff = go.Figure()
+fig_eff.add_hrect(y0=p60_elite, y1=p60_elite * 1.8, fillcolor="rgba(249,115,22,0.05)", line_width=0)
+fig_eff.add_hrect(y0=p60_avg, y1=p60_elite, fillcolor="rgba(90,143,78,0.04)", line_width=0)
+fig_eff.add_hline(
+    y=p60_elite, line_dash="dot", line_color="rgba(249,115,22,0.5)",
+    annotation_text=f"Elite {p60_label} ({p60_elite} P/60)",
+    annotation_font_size=9, annotation_font_color="rgba(249,115,22,0.8)",
+    annotation_position="top right",
+)
+fig_eff.add_hline(
+    y=p60_avg, line_dash="dot", line_color="rgba(255,255,255,0.2)",
+    annotation_text=f"NHL avg ({p60_avg} P/60)",
+    annotation_font_size=9, annotation_font_color="#8896a8",
+    annotation_position="bottom right",
+)
+fig_eff.add_trace(go.Scatter(
+    x=df["season_label"], y=df["p60"].round(2),
+    name="P/60",
+    mode="lines+markers",
+    line=dict(color="#5a8f4e", width=2.5),
+    marker=dict(size=7, color="#5a8f4e", line=dict(width=1.5, color="#0a0a0a")),
+    fill="tozeroy", fillcolor="rgba(90,143,78,0.09)",
+    hovertemplate="<b>%{x}</b><br>P/60: %{y:.2f}<extra></extra>",
+))
+peak_p60_idx = df["p60"].idxmax()
+peak_p60_val = float(df.loc[peak_p60_idx, "p60"])
+fig_eff.add_annotation(
+    x=df.loc[peak_p60_idx, "season_label"], y=peak_p60_val,
+    text=f"Career best {peak_p60_val:.2f}",
+    showarrow=True, arrowhead=2, arrowwidth=1.5,
+    arrowcolor="#5a8f4e", ax=0, ay=-36,
+    font=dict(size=10, color="#5a8f4e"),
+    bgcolor="rgba(15,15,15,0.8)", bordercolor="#5a8f4e",
+    borderwidth=1, borderpad=4,
+)
+fig_eff.update_layout(
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font_color="#8896a8", font_size=11,
+    margin=dict(l=0, r=0, t=30, b=30),
+    height=320,
+    showlegend=False,
+    xaxis=dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-35),
+    yaxis=dict(gridcolor="rgba(255,255,255,0.06)", tickfont=dict(size=10), title="P/60", rangemode="tozero"),
+)
+st.plotly_chart(fig_eff, use_container_width=True, config={"displayModeBar": False})
+st.markdown(
+    f"<p style='color:#8896a8;font-size:11px;'>"
+    f"<b style='color:#fff;'>P/60</b> removes the effect of ice time — elite {p60_label} territory starts at "
+    f"{p60_elite} P/60 (orange zone), above-average at {p60_avg} (green zone).</p>",
+    unsafe_allow_html=True,
+)
+
+# ── Season Table ───────────────────────────────────────────────────────────────
+st.markdown(
+    "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
+    "letter-spacing:0.08em;color:#8896a8;margin:28px 0 6px;'>Season by Season</p>",
+    unsafe_allow_html=True,
+)
+
+rows = ""
+for _, r in df.sort_values("season_year", ascending=False).iterrows():
+    p60_val = float(r["p60"])
+    p60_color = "#f97316" if p60_val >= 2.5 else ("#5a8f4e" if p60_val >= 1.5 else "#8896a8")
+    cpi_val = float(r["cpi"])
+    gp_val = int(r["gp"])
+    gp_color = "#5a8f4e" if gp_val >= 70 else ("#f97316" if gp_val >= 50 else "#c41e3a")
+    rows += (
+        f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+        f'<td style="padding:8px 14px;color:#fff;font-weight:600;font-size:12px;">{r["season_label"]}</td>'
+        f'<td style="padding:8px 8px;color:{gp_color};font-size:12px;text-align:center;">{gp_val}</td>'
+        f'<td style="padding:8px 8px;color:#fff;font-size:12px;text-align:center;">{int(r["goals"])}</td>'
+        f'<td style="padding:8px 8px;color:#8896a8;font-size:12px;text-align:center;">{int(r["assists"])}</td>'
+        f'<td style="padding:8px 8px;color:#5a8f4e;font-weight:700;font-size:12px;text-align:center;">{int(r["points"])}</td>'
+        f'<td style="padding:8px 8px;color:#f97316;font-size:12px;text-align:center;">{r["pts_per_82"]:.0f}</td>'
+        f'<td style="padding:8px 8px;color:#87ceeb;font-size:12px;text-align:center;">{r["avg_toi_min"]:.1f}</td>'
+        f'<td style="padding:8px 8px;color:{p60_color};font-family:monospace;font-weight:700;font-size:12px;text-align:center;">{p60_val:.2f}</td>'
+        f'<td style="padding:8px 14px;color:#8896a8;font-family:monospace;font-size:12px;text-align:center;">{cpi_val:.2f}</td>'
+        f'</tr>'
     )
 
-    fig_eff.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#8896a8", font_size=11,
-        margin=dict(l=0, r=0, t=30, b=30),
-        height=320,
-        showlegend=False,
-        xaxis=dict(type="category", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-35),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.06)", tickfont=dict(size=10), title="P/60", rangemode="tozero"),
-    )
-    st.plotly_chart(fig_eff, use_container_width=True, config={"displayModeBar": False})
-
-    st.markdown(
-        f"<p style='color:#8896a8;font-size:11px;'>"
-        f"<b style='color:#fff;'>P/60</b> (Points per 60 minutes of ice time) is the industry-standard "
-        f"efficiency metric — it removes the effect of ice time so you can compare players across eras "
-        f"and roles. Orange zone = elite {p60_label} territory (≥{p60_elite}). "
-        f"Green zone = above-average production (≥{p60_avg}).</p>",
-        unsafe_allow_html=True,
-    )
-
-# ── Tab: Season Table ─────────────────────────────────────────────────────────
-with tab_table:
-    rows = ""
-    for _, r in df.sort_values("season_year", ascending=False).iterrows():
-        p60_val = float(r["p60"])
-        p60_color = "#f97316" if p60_val >= 2.5 else ("#5a8f4e" if p60_val >= 1.5 else "#8896a8")
-        cpi_val = float(r["cpi"])
-        gp_val = int(r["gp"])
-        gp_color = "#5a8f4e" if gp_val >= 70 else ("#f97316" if gp_val >= 50 else "#c41e3a")
+if has_projection:
+    proj_labels_tbl = [f"{y}-{str(y+1)[2:]}" for y in proj_years]
+    for i, lbl in enumerate(proj_labels_tbl):
+        p_val = proj_pts82[i]
+        c_val = proj_cpi[i]
         rows += (
-            f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-            f'<td style="padding:8px 14px;color:#fff;font-weight:600;font-size:12px;">{r["season_label"]}</td>'
-            f'<td style="padding:8px 8px;color:{gp_color};font-size:12px;text-align:center;">{gp_val}</td>'
-            f'<td style="padding:8px 8px;color:#fff;font-size:12px;text-align:center;">{int(r["goals"])}</td>'
-            f'<td style="padding:8px 8px;color:#8896a8;font-size:12px;text-align:center;">{int(r["assists"])}</td>'
-            f'<td style="padding:8px 8px;color:#5a8f4e;font-weight:700;font-size:12px;text-align:center;">{int(r["points"])}</td>'
-            f'<td style="padding:8px 8px;color:#f97316;font-size:12px;text-align:center;">{r["pts_per_82"]:.0f}</td>'
-            f'<td style="padding:8px 8px;color:#87ceeb;font-size:12px;text-align:center;">{r["avg_toi_min"]:.1f}</td>'
-            f'<td style="padding:8px 8px;color:{p60_color};font-family:monospace;font-weight:700;font-size:12px;text-align:center;">{p60_val:.2f}</td>'
-            f'<td style="padding:8px 14px;color:#8896a8;font-family:monospace;font-size:12px;text-align:center;">{cpi_val:.2f}</td>'
+            f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);'
+            f'background:rgba(90,143,78,0.04);opacity:0.7;">'
+            f'<td style="padding:8px 14px;color:#5a8f4e;font-style:italic;font-size:12px;">'
+            f'{lbl} <span style="font-size:10px;color:#5a8f4e33;">(proj)</span></td>'
+            f'<td colspan="4" style="padding:8px 8px;color:#8896a8;font-size:11px;text-align:center;">—</td>'
+            f'<td style="padding:8px 8px;color:#5a8f4e;font-size:12px;text-align:center;font-style:italic;">{p_val:.0f}</td>'
+            f'<td style="padding:8px 8px;color:#8896a8;text-align:center;">—</td>'
+            f'<td style="padding:8px 8px;color:#8896a8;text-align:center;">—</td>'
+            f'<td style="padding:8px 14px;color:#5a8f4e;font-style:italic;text-align:center;">{c_val:.2f}</td>'
             f'</tr>'
         )
 
-    # Projection rows
-    if has_projection:
-        proj_labels = [f"{y}-{str(y+1)[2:]}" for y in proj_years]
-        for i, lbl in enumerate(proj_labels):
-            p_val = proj_pts82[i]
-            c_val = proj_cpi[i]
-            rows += (
-                f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);'
-                f'background:rgba(90,143,78,0.04);opacity:0.7;">'
-                f'<td style="padding:8px 14px;color:#5a8f4e;font-style:italic;font-size:12px;">'
-                f'{lbl} <span style="font-size:10px;color:#5a8f4e33;">(proj)</span></td>'
-                f'<td colspan="4" style="padding:8px 8px;color:#8896a8;font-size:11px;text-align:center;">—</td>'
-                f'<td style="padding:8px 8px;color:#5a8f4e;font-size:12px;text-align:center;font-style:italic;">{p_val:.0f}</td>'
-                f'<td style="padding:8px 8px;color:#8896a8;text-align:center;">—</td>'
-                f'<td style="padding:8px 8px;color:#8896a8;text-align:center;">—</td>'
-                f'<td style="padding:8px 14px;color:#5a8f4e;font-style:italic;text-align:center;">{c_val:.2f}</td>'
-                f'</tr>'
-            )
+st.html(
+    f'<div style="border:1px solid rgba(255,255,255,0.08);border-radius:5px;overflow:hidden;">'
+    f'<table style="width:100%;border-collapse:collapse;">'
+    f'<thead><tr style="background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.08);">'
+    f'<th style="padding:8px 14px;color:#8896a8;font-size:10px;font-weight:600;text-align:left;">Season</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">GP</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">G</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">A</th>'
+    f'<th style="padding:8px 8px;color:#5a8f4e;font-size:10px;font-weight:700;text-align:center;">PTS</th>'
+    f'<th style="padding:8px 8px;color:#f97316;font-size:10px;font-weight:600;text-align:center;">PTS/82</th>'
+    f'<th style="padding:8px 8px;color:#87ceeb;font-size:10px;font-weight:600;text-align:center;">TOI/g</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:700;text-align:center;">P/60</th>'
+    f'<th style="padding:8px 14px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">CPI</th>'
+    f'</tr></thead><tbody>{rows}</tbody>'
+    f'</table></div>'
+)
 
-    st.html(
-        f'<div style="border:1px solid rgba(255,255,255,0.08);border-radius:5px;overflow:hidden;">'
-        f'<table style="width:100%;border-collapse:collapse;">'
-        f'<thead><tr style="background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.08);">'
-        f'<th style="padding:8px 14px;color:#8896a8;font-size:10px;font-weight:600;text-align:left;">Season</th>'
-        f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">GP</th>'
-        f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">G</th>'
-        f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">A</th>'
-        f'<th style="padding:8px 8px;color:#5a8f4e;font-size:10px;font-weight:700;text-align:center;">PTS</th>'
-        f'<th style="padding:8px 8px;color:#f97316;font-size:10px;font-weight:600;text-align:center;">PTS/82</th>'
-        f'<th style="padding:8px 8px;color:#87ceeb;font-size:10px;font-weight:600;text-align:center;">TOI/g</th>'
-        f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:700;text-align:center;">P/60</th>'
-        f'<th style="padding:8px 14px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">CPI</th>'
-        f'</tr></thead><tbody>{rows}</tbody>'
-        f'</table></div>'
-    )
-
-    st.markdown(
-        "<p style='color:#8896a8;font-size:10px;margin-top:8px;'>"
-        "PTS/82 = points pace over full 82-game season · "
-        "P/60 = points per 60 min TOI (efficiency) · "
-        "CPI = composite index (P/60 × deployment × durability). "
-        "Projected rows use polynomial regression on last 6 healthy seasons.</p>",
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    "<p style='color:#8896a8;font-size:10px;margin-top:8px;'>"
+    "PTS/82 = points pace over full 82-game season · "
+    "P/60 = points per 60 min TOI (efficiency) · "
+    "CPI = composite index (P/60 × deployment × durability). "
+    "Projected rows use polynomial regression on last 6 healthy seasons.</p>",
+    unsafe_allow_html=True,
+)
 
 data_source_footer()

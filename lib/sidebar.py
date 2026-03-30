@@ -66,9 +66,19 @@ def render() -> None:
         # ── Logo ──────────────────────────────────────────────────────────────
         st.markdown(
             """
-            <div style="margin-top:-24px; padding-bottom:20px;">
-              <div style="color:#fff; font-weight:700; font-size:16px;
-                          letter-spacing:-0.02em; line-height:1.2;">The Hockey Analytics</div>
+            <div style="margin-top:-24px; padding-bottom:24px; border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom:16px;">
+              <div style="display:flex; align-items:center; gap:9px;">
+                <div style="background:#5a8f4e; border-radius:5px; width:30px; height:30px;
+                            display:flex; align-items:center; justify-content:center;
+                            font-family:Arial,sans-serif; font-size:11px; font-weight:900;
+                            color:#fff; letter-spacing:-0.02em; flex-shrink:0;">THA</div>
+                <div>
+                  <div style="color:#fff; font-weight:800; font-size:15px;
+                              letter-spacing:-0.03em; line-height:1.1;">The Hockey Analytics</div>
+                  <div style="color:#5a8f4e; font-size:10px; font-weight:600;
+                              letter-spacing:0.06em; text-transform:uppercase; margin-top:1px;">NHL · Analytics</div>
+                </div>
+              </div>
             </div>
             """,
             unsafe_allow_html=True,

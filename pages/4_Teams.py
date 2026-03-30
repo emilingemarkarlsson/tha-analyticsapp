@@ -121,8 +121,11 @@ with col_games:
     else:
         rows_html = ""
         for _, g in df_games.iterrows():
-            pts = int(g["team_points"])
+            pts = int(g["team_points"] or 0)
             win, otl = pts == 2, pts == 1
+            goals_for = g["goals_for"]
+            goals_against = g["goals_against"]
+            score_str = f"{int(goals_for)}–{int(goals_against)}" if goals_for is not None and goals_against is not None else "–"
             res = "W" if win else ("OTL" if otl else "L")
             res_color = "#5a8f4e" if win else ("#87ceeb" if otl else "#c41e3a")
             res_bg = "rgba(90,143,78,0.15)" if win else ("rgba(135,206,235,0.1)" if otl else "rgba(196,30,58,0.15)")
@@ -132,7 +135,7 @@ with col_games:
               <td style="padding:8px 14px;color:#8896a8;font-size:12px;">{str(g['game_date'])[:10]}</td>
               <td style="padding:8px 8px;color:#fff;font-weight:600;font-size:13px;">{g['opponent_abbr']}</td>
               <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:11px;">{ha}</td>
-              <td style="text-align:center;padding:8px 8px;color:#fff;font-family:monospace;font-size:13px;">{int(g['goals_for'])}–{int(g['goals_against'])}</td>
+              <td style="text-align:center;padding:8px 8px;color:#fff;font-family:monospace;font-size:13px;">{score_str}</td>
               <td style="text-align:center;padding:8px 14px;">
                 <span style="color:{res_color};background:{res_bg};padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;">{res}</span>
               </td>

@@ -56,21 +56,19 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
+    # ── Favicon (SVG THA green box) ───────────────────────────────────────────
+    st.markdown(
+        """<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='5' fill='%235a8f4e'/%3E%3Ctext x='3' y='22' font-family='Arial,sans-serif' font-size='13' font-weight='900' fill='white'%3ETHA%3C/text%3E%3C/svg%3E">""",
+        unsafe_allow_html=True,
+    )
+
     with st.sidebar:
         # ── Logo ──────────────────────────────────────────────────────────────
         st.markdown(
             """
             <div style="padding: 8px 0 20px 0;">
-              <div style="display:flex; align-items:center; gap:10px;">
-                <div style="background:#5a8f4e; color:#fff; font-weight:900;
-                            font-size:11px; padding:4px 7px; border-radius:4px;
-                            letter-spacing:0.05em;">THA</div>
-                <div>
-                  <div style="color:#fff; font-weight:700; font-size:14px;
-                              letter-spacing:-0.01em; line-height:1.1;">Analytics</div>
-                  <div style="color:#8896a8; font-size:11px;">NHL Intelligence</div>
-                </div>
-              </div>
+              <div style="color:#fff; font-weight:700; font-size:16px;
+                          letter-spacing:-0.02em; line-height:1.2;">The Hockey Analytics</div>
             </div>
             """,
             unsafe_allow_html=True,

@@ -182,6 +182,44 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Career narrative ──────────────────────────────────────────────────────────
+current_pts82 = float(df["pts_per_82"].iloc[-1])
+current_season_label = df["season_label"].iloc[-1]
+peak_pct = current_pts82 / peak_pts82 * 100 if peak_pts82 > 0 else 0
+
+if peak_pct >= 90:
+    form_sentence = f"This season ({current_season_label}) they are producing {current_pts82:.0f} PTS/82 — right at their historical peak."
+elif peak_pct >= 70:
+    form_sentence = f"This season ({current_season_label}) they are producing {current_pts82:.0f} PTS/82 — {peak_pct:.0f}% of their peak output."
+elif peak_pct >= 40:
+    form_sentence = f"This season ({current_season_label}) they are producing {current_pts82:.0f} PTS/82, down from a peak of {peak_pts82:.0f} in {peak_season}."
+else:
+    form_sentence = f"Production this season ({current_pts82:.0f} PTS/82) is well below their career peak of {peak_pts82:.0f} in {peak_season}."
+
+if has_projection:
+    next_proj = proj_pts82[0]
+    next_label = f"{proj_years[0]}-{str(proj_years[0]+1)[2:]}"
+    trend_word = "improve to" if next_proj > current_pts82 else "ease to"
+    proj_sentence = f"The model projects {trend_word} {next_proj:.0f} PTS/82 pace in {next_label}."
+else:
+    proj_sentence = "Insufficient data for multi-season projection."
+
+pos_label = {"C": "centre", "L": "left wing", "R": "right wing", "D": "defenceman"}.get(player_pos, player_pos)
+narrative = (
+    f"{player_name} is an NHL {pos_label} with {seasons_count} regular-season campaigns, "
+    f"accumulating {career_pts} career points in {career_gp} games. "
+    f"{form_sentence} {proj_sentence}"
+)
+st.markdown(
+    f"<div style='background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);"
+    f"border-radius:5px;padding:14px 18px;margin-bottom:20px;'>"
+    f"<p style='color:#8896a8;font-size:10px;font-weight:600;text-transform:uppercase;"
+    f"letter-spacing:0.06em;margin-bottom:6px;'>Career Summary</p>"
+    f"<p style='color:#e0e8f0;font-size:13px;line-height:1.6;margin:0;'>{narrative}</p>"
+    f"</div>",
+    unsafe_allow_html=True,
+)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # COMPOSITE CAREER ARC (full width)
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
-from lib.components import page_header, zscore_legend, data_source_footer
+from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
 
 st.set_page_config(page_title="Players – THA Analytics", layout="wide")
 _render_sidebar()
@@ -71,8 +71,6 @@ st.markdown(
 rows_html = ""
 for idx, row in filtered.iterrows():
     z = float(row["pts_zscore_5v20"])
-    z_color = "#f97316" if z >= 0 else "#87ceeb"
-    z_str = f"+{z:.2f}" if z >= 0 else f"{z:.2f}"
     rows_html += f"""
     <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
       <td style="padding:8px 14px;color:#fff;font-weight:500;font-size:12px;">{row['name']}</td>
@@ -82,7 +80,7 @@ for idx, row in filtered.iterrows():
       <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:12px;">{int(row['assists_season'])}</td>
       <td style="text-align:center;padding:8px 8px;color:#fff;font-weight:500;font-size:12px;">{float(row['pts_avg_5g']):.2f}</td>
       <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:12px;">{float(row['pts_avg_20g']):.2f}</td>
-      <td style="text-align:center;padding:8px 8px;color:{z_color};font-family:monospace;font-weight:700;font-size:12px;">{z_str}</td>
+      <td style="text-align:center;padding:8px 8px;">{tier_badge_html(z)}</td>
     </tr>"""
 
 st.markdown(

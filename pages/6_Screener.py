@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
-from lib.components import page_header, zscore_legend, data_source_footer
+from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
 from lib import userdb
 
 st.set_page_config(page_title="Screener – THA Analytics", layout="wide")
@@ -151,15 +151,6 @@ if df.empty:
     st.stop()
 
 # Build HTML table
-def z_badge(z: float) -> str:
-    if z >= 1.0:
-        return f"<span style='color:#f97316;font-weight:700;'>{z:+.2f}σ</span>"
-    if z >= 0.5:
-        return f"<span style='color:#5a8f4e;font-weight:700;'>{z:+.2f}σ</span>"
-    if z <= -0.8:
-        return f"<span style='color:#87ceeb;font-weight:600;'>{z:+.2f}σ</span>"
-    return f"<span style='color:#8896a8;'>{z:+.2f}σ</span>"
-
 rows_html = ""
 for rank, (_, r) in enumerate(df.iterrows(), 1):
     bg = "rgba(255,255,255,0.02)" if rank % 2 == 0 else "transparent"
@@ -176,7 +167,7 @@ for rank, (_, r) in enumerate(df.iterrows(), 1):
         f'<td style="padding:7px 8px;color:#fff;font-size:12px;text-align:center;">{r["pts_avg_5g"]}</td>'
         f'<td style="padding:7px 8px;color:#8896a8;font-size:12px;text-align:center;">{r["pts_avg_20g"]}</td>'
         f'<td style="padding:7px 8px;color:#8896a8;font-size:12px;text-align:center;">{r["toi_min"]}</td>'
-        f'<td style="padding:7px 14px;text-align:center;">{z_badge(float(r["pts_zscore_5v20"]))}</td>'
+        f'<td style="padding:7px 14px;text-align:center;">{tier_badge_html(float(r["pts_zscore_5v20"]))}</td>'
         f'</tr>'
     )
 

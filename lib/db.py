@@ -67,3 +67,17 @@ def player_career(player_id: str) -> pd.DataFrame:
         HAVING COUNT(DISTINCT pgs.game_id) >= 5
         ORDER BY g.season
     """).df()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def team_career(team_abbr: str) -> pd.DataFrame:
+    """Season-by-season franchise history from standings. Cached 1 h."""
+    return get_con().execute(f"""
+        SELECT season,
+               wins, losses, otLosses, gamesPlayed,
+               points, goalFor, goalAgainst, goalDifferential,
+               winPctg, pointPctg, divisionName
+        FROM standings
+        WHERE teamAbbrev = '{team_abbr}'
+        ORDER BY season
+    """).df()

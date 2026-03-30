@@ -14,7 +14,8 @@ st.set_page_config(
 from lib.sidebar import render as _render_sidebar
 _render_sidebar()
 
-from lib.db import query
+from lib.db import query, get_data_date
+from lib.components import data_source_footer, zscore_legend
 
 INSIGHT_COLORS: dict[str, str] = {
     "hot_streak": "#f97316",
@@ -39,10 +40,8 @@ FILTER_GROUPS: dict[str, list[str]] = {
     "Goalies": ["goalie_hot", "goalie_cold"],
 }
 
-st.markdown(
-    "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>Intelligence Feed</h1>",
-    unsafe_allow_html=True,
-)
+from lib.components import page_header
+page_header("Intelligence Feed", "AI-generated insights · updated daily", data_date=get_data_date())
 
 try:
     df_insights = query("""
@@ -258,3 +257,6 @@ if db_ok:
             </div>""",
             unsafe_allow_html=True,
         )
+
+data_source_footer()
+zscore_legend()

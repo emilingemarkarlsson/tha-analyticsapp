@@ -4,17 +4,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 import pandas as pd
-from lib.db import query
+from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.components import page_header, zscore_legend, data_source_footer
 
 st.set_page_config(page_title="Players – THA Analytics", layout="wide")
 _render_sidebar()
 
-st.markdown(
-    "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>Players</h1>"
-    "<p style='color:#8896a8;font-size:13px;margin-bottom:24px;'>Current season form · 5-game vs 20-game baseline z-score</p>",
-    unsafe_allow_html=True,
-)
+page_header("Players", "Current season form · 5-game vs 20-game baseline z-score", data_date=get_data_date())
+zscore_legend()
 
 try:
     df = query("""
@@ -110,3 +108,5 @@ st.markdown(
     </div></div>""",
     unsafe_allow_html=True,
 )
+
+data_source_footer('Form (σ) = z-score of last 5 games vs 20-game rolling average')

@@ -5,8 +5,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from lib.db import query, query_fresh
+from lib.db import query, query_fresh, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.components import data_source_footer, methodology_note
 
 st.set_page_config(page_title="Teams – THA Analytics", layout="wide")
 _render_sidebar()
@@ -19,11 +20,8 @@ ALL_TEAMS = [
 
 team = st.selectbox("Select team", ALL_TEAMS, index=ALL_TEAMS.index("TOR"), label_visibility="collapsed")
 
-st.markdown(
-    f"<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>{team}</h1>"
-    f"<p style='color:#8896a8;font-size:13px;margin-bottom:24px;'>Current season · Regular season</p>",
-    unsafe_allow_html=True,
-)
+from lib.components import page_header
+page_header(team, "Current season · Regular season", data_date=get_data_date())
 
 try:
     df_season = query_fresh(f"""
@@ -186,3 +184,5 @@ with col_insights:
                 </div>""",
                 unsafe_allow_html=True,
             )
+
+data_source_footer('Form (σ) = last 5 games vs 20-game baseline · pts_zscore_5v20')

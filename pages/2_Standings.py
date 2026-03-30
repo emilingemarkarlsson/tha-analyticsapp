@@ -4,17 +4,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 import pandas as pd
-from lib.db import query
+from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.components import page_header, data_source_footer
 
 st.set_page_config(page_title="Standings – THA Analytics", layout="wide")
 _render_sidebar()
 
-st.markdown(
-    "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>Standings</h1>"
-    "<p style='color:#8896a8;font-size:13px;margin-bottom:24px;'>Current season · Regular season</p>",
-    unsafe_allow_html=True,
-)
+page_header("Standings", "Current season · Regular season", data_date=get_data_date())
 
 DIVISION_ORDER = ["A", "M", "C", "P"]
 DIVISION_NAMES = {"A": "Atlantic", "M": "Metropolitan", "C": "Central", "P": "Pacific"}
@@ -149,3 +146,5 @@ with col1:
     st.html(html_left)
 with col2:
     st.html(html_right)
+
+data_source_footer('Standings recalculated each morning from official NHL data')

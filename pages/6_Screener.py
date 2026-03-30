@@ -4,18 +4,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 import pandas as pd
-from lib.db import query
+from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.components import page_header, zscore_legend, data_source_footer
 from lib import userdb
 
 st.set_page_config(page_title="Screener – THA Analytics", layout="wide")
 _render_sidebar()
 
-st.markdown(
-    "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>Player Screener</h1>"
-    "<p style='color:#8896a8;font-size:13px;margin-bottom:20px;'>Filter and rank players across any criteria — like a stock screener</p>",
-    unsafe_allow_html=True,
-)
+page_header("Player Screener", "Filter and rank players across any criteria", data_date=get_data_date())
+zscore_legend()
 
 # ── Presets ────────────────────────────────────────────────────────────────────
 PRESETS = {
@@ -272,3 +270,5 @@ with rb_col:
             st.success(f"Added {len(to_add)} player(s) to '{sel_roster}'.")
             st.session_state.pop("quick_roster_players", None)
             st.rerun()
+
+data_source_footer('Screener uses player_rolling_stats WHERE game_recency_rank = 1 (latest snapshot per player)')

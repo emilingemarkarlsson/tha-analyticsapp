@@ -7,8 +7,9 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from lib.db import query_fresh
+from lib.db import query_fresh, player_career, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.components import page_header, methodology_note, projection_disclaimer, data_source_footer, zscore_legend
 
 st.set_page_config(page_title="Player History – THA Analytics", layout="wide")
 _render_sidebar()
@@ -72,23 +73,8 @@ player_pos = player_row["position"]
 
 # ── Load career data ───────────────────────────────────────────────────────────
 try:
-    df = query_fresh(f"""
-        SELECT g.season,
-               COUNT(DISTINCT pgs.game_id)        AS gp,
-               SUM(pgs.goals)                     AS goals,
-               SUM(pgs.assists)                   AS assists,
-               SUM(pgs.goals + pgs.assists)       AS points,
-               SUM(pgs.toi_seconds) / 3600.0      AS toi_hours,
-               AVG(pgs.toi_seconds) / 60.0        AS avg_toi_min
-        FROM player_game_stats pgs
-        JOIN games g ON pgs.game_id = g.game_id
-        WHERE TRY_CAST(pgs.player_id AS VARCHAR) = '{player_id}'
-          AND g.game_type = 2
-          AND pgs.toi_seconds > 0
-        GROUP BY g.season
-        HAVING COUNT(DISTINCT pgs.game_id) >= 5
-        ORDER BY g.season
-    """)
+    with st.spinner("Loading career data…"):
+        df = player_career(player_id)
 except Exception as e:
     st.error(f"Database error: {e}")
     st.stop()
@@ -162,12 +148,10 @@ peak_pts82 = float(df["pts_per_82"].max())
 peak_season = df.loc[df["pts_per_82"].idxmax(), "season_label"]
 latest_cpi = float(df["cpi"].iloc[-1])
 
-st.markdown(
-    f"<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:2px;'>"
-    f"{player_name}</h1>"
-    f"<p style='color:#8896a8;font-size:13px;margin-bottom:20px;'>"
-    f"{player_row['team_abbr']} · {player_pos} · {seasons_count} NHL seasons</p>",
-    unsafe_allow_html=True,
+page_header(
+    player_name,
+    f"{player_row['team_abbr']} · {player_pos} · {seasons_count} NHL seasons",
+    data_date=get_data_date(),
 )
 
 # Career summary bar
@@ -251,6 +235,7 @@ fig_arc.update_layout(
     yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), title="CPI"),
 )
 st.plotly_chart(fig_arc, use_container_width=True, config={"displayModeBar": False})
+projection_disclaimer()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SUBTABS
@@ -515,3 +500,5 @@ with tab_table:
         "Projected rows use polynomial regression on last 6 healthy seasons.</p>",
         unsafe_allow_html=True,
     )
+
+data_source_footer()

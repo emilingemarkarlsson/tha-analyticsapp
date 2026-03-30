@@ -47,19 +47,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Auto-set default selection BEFORE any widgets are rendered
+if not st.session_state.get("ph_selected_id") and not df_top.empty:
+    st.session_state["ph_selected_id"] = df_top.iloc[0]["player_id"]
+
 if not df_top.empty:
     cols = st.columns(min(len(df_top), 5))
     for i, (_, r) in enumerate(df_top.iterrows()):
         col_idx = i % 5
         with cols[col_idx]:
-            label = f"{r['name']}  ({r['team_abbr']} · {r['position']})"
+            is_active = st.session_state.get("ph_selected_id") == r["player_id"]
             if st.button(
                 f"{r['name']}\n{r['team_abbr']} · {r['position']}",
                 key=f"top_{r['player_id']}",
                 use_container_width=True,
+                type="primary" if is_active else "secondary",
                 help=f"PTS/5g: {r['pts5g']}  ·  Form: {r['z']:+.2f}σ",
             ):
-                st.session_state["ph_search"] = r["name"]
                 st.session_state["ph_selected_id"] = r["player_id"]
                 st.rerun()
 
@@ -73,18 +77,11 @@ search = st.text_input(
     key="ph_search",
 )
 
-# Auto-select top trending player if no search and no explicit selection
-if (not search or len(search) < 2) and not st.session_state.get("ph_selected_id"):
-    if not df_top.empty:
-        top = df_top.iloc[0]
-        st.session_state["ph_search"] = top["name"]
-        st.session_state["ph_selected_id"] = top["player_id"]
-        st.rerun()
-    else:
-        st.info("Enter a player name to explore their full career history.")
-        st.stop()
+# If search is active, clear the direct selection so search takes over
+if search and len(search) >= 2:
+    st.session_state.pop("ph_selected_id", None)
 
-# If we have a directly selected player ID (from top-10 buttons), use it
+# If we have a directly selected player ID (from top-10 buttons or default), use it
 if st.session_state.get("ph_selected_id") and (not search or len(search) < 2):
     pid = st.session_state["ph_selected_id"]
     try:

@@ -169,16 +169,19 @@ avg_pts = df["points"].mean()
 above_avg = df[df["points"] >= 96]  # ~playoff threshold
 worst_row = df.loc[df["points"].idxmin()]
 
+def _b(text: str) -> str:
+    return f"<b style='color:#fff;'>{text}</b>"
+
 narrative = (
-    f"**{team}** has {total_seasons} seasons of data since 2009-10, averaging "
-    f"**{avg_pts:.0f} points** per season. "
-    f"Their best campaign was **{best_season}** ({best_pts} pts). "
+    f"{_b(team)} has {total_seasons} seasons of data since 2009-10, averaging "
+    f"{_b(f'{avg_pts:.0f} points')} per season. "
+    f"Their best campaign was {_b(best_season)} ({best_pts} pts). "
 )
 if playoff_seasons > 0:
-    narrative += f"The franchise has made the playoffs **{playoff_seasons}** times, reaching the {deepest.lower()}. "
+    narrative += f"The franchise has made the playoffs {_b(str(playoff_seasons))} times, reaching the {deepest.lower()}. "
 if len(above_avg) > 0:
-    narrative += f"They have finished with 96+ points in **{len(above_avg)}** seasons. "
-narrative += f"Over the last 3 seasons, performance has been **{recent_trend}**."
+    narrative += f"They have finished with 96+ points in {_b(str(len(above_avg)))} seasons. "
+narrative += f"Over the last 3 seasons, performance has been {_b(recent_trend)}."
 
 st.markdown(
     f"<div style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);"
@@ -194,13 +197,18 @@ LAYOUT_BASE = dict(
     font_color="#8896a8",
     font_size=11,
     margin=dict(l=0, r=10, t=30, b=30),
-    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
+    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10), tickangle=-45),
     yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
     legend=dict(
         orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
         font=dict(size=10), bgcolor="rgba(0,0,0,0)",
     ),
 )
+
+def _apply_category_xaxis(fig) -> None:
+    """Force x-axis to categorical so season labels like '2009-10' aren't parsed as dates."""
+    fig.update_xaxes(type="category", tickangle=-45, tickfont=dict(size=10),
+                     gridcolor="rgba(255,255,255,0.04)")
 
 seasons = df["season_label"].tolist()
 current_season = seasons[-1]
@@ -272,6 +280,7 @@ if is_current_in_progress:
     )
 
 fig_arc.update_layout(height=300, **LAYOUT_BASE)
+_apply_category_xaxis(fig_arc)
 st.plotly_chart(fig_arc, use_container_width=True, config={"displayModeBar": False})
 
 # ── 2. Goals For / Against Arc ─────────────────────────────────────────────────
@@ -330,6 +339,7 @@ fig_goals.add_annotation(
 )
 
 fig_goals.update_layout(height=280, **LAYOUT_BASE)
+_apply_category_xaxis(fig_goals)
 st.plotly_chart(fig_goals, use_container_width=True, config={"displayModeBar": False})
 
 # ── 3. Win % trend ─────────────────────────────────────────────────────────────
@@ -378,8 +388,9 @@ fig_pct.add_annotation(
 fig_pct.update_layout(
     height=240,
     yaxis=dict(tickformat=".0%", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
-    **{k: v for k, v in LAYOUT_BASE.items() if k != "yaxis"},
+    **{k: v for k, v in LAYOUT_BASE.items() if k not in ("yaxis",)},
 )
+_apply_category_xaxis(fig_pct)
 st.plotly_chart(fig_pct, use_container_width=True, config={"displayModeBar": False})
 
 # ── 4. Current season form (GF/GA per game) ────────────────────────────────────
@@ -420,12 +431,10 @@ if not df_form.empty:
         line=dict(color="#c41e3a", width=1.5, dash="dot"), opacity=0.6,
     ))
 
-    fig_form.update_layout(
-        barmode="group", height=200, **LAYOUT_BASE,
-        xaxis=dict(
-            gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9),
-            tickangle=-45, nticks=20,
-        ),
+    fig_form.update_layout(barmode="group", height=200, **LAYOUT_BASE)
+    fig_form.update_xaxes(
+        gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9),
+        tickangle=-45, nticks=20,
     )
     st.plotly_chart(fig_form, use_container_width=True, config={"displayModeBar": False})
     methodology_note("Green bars = win · Blue = OT loss · Faded = regulation loss. Dotted lines = 5-game rolling average.")

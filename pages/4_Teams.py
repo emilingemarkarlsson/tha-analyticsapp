@@ -6,8 +6,10 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from lib.db import query, query_fresh
+from lib.sidebar import render as _render_sidebar
 
 st.set_page_config(page_title="Teams – THA Analytics", layout="wide")
+_render_sidebar()
 
 ALL_TEAMS = [
     "ANA","ARI","BOS","BUF","CAR","CGY","CHI","COL","CBJ","DAL",

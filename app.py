@@ -1,4 +1,7 @@
 """THA Analytics – NHL Hockey Intelligence (Streamlit entry point)."""
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+
 import streamlit as st
 
 st.set_page_config(
@@ -8,116 +11,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Global CSS ────────────────────────────────────────────────────────────────
-st.markdown(
-    """
-    <style>
-    /* Hide default Streamlit elements */
-    #MainMenu, footer, header { visibility: hidden; }
-
-    /* Hide auto-generated page nav (we use our own) */
-    [data-testid="stSidebarNav"] { display: none !important; }
-
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background: #050505;
-        border-right: 1px solid rgba(255,255,255,0.08);
-    }
-
-    /* Card-like containers */
-    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
-        border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 6px;
-        background: rgba(255,255,255,0.03);
-    }
-
-    /* Tables */
-    thead tr th {
-        background: rgba(255,255,255,0.04) !important;
-        color: #8896a8 !important;
-        font-size: 11px !important;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        font-weight: 600;
-    }
-
-    /* Metric labels */
-    [data-testid="stMetricLabel"] { color: #8896a8 !important; font-size: 11px !important; }
-    [data-testid="stMetricValue"] { font-weight: 800 !important; letter-spacing: -0.02em; }
-
-    /* Input fields */
-    input, textarea {
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(255,255,255,0.10) !important;
-        border-radius: 4px !important;
-        color: #f1f5f9 !important;
-    }
-
-    /* Buttons */
-    div[data-testid="stButton"] button {
-        background: #5a8f4e !important;
-        color: white !important;
-        border: none !important;
-        font-weight: 600 !important;
-        border-radius: 4px !important;
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── Sidebar branding ──────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown(
-        """
-        <div style="padding: 8px 0 20px 0;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div style="background:#5a8f4e; color:#fff; font-weight:900;
-                        font-size:11px; padding:4px 7px; border-radius:4px;
-                        letter-spacing:0.05em;">THA</div>
-            <div>
-              <div style="color:#fff; font-weight:700; font-size:14px;
-                          letter-spacing:-0.01em; line-height:1.1;">Analytics</div>
-              <div style="color:#8896a8; font-size:11px;">NHL Intelligence</div>
-            </div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.page_link("app.py", label="Intelligence Feed", icon=":material/trending_up:")
-    st.page_link("pages/2_Standings.py", label="Standings", icon=":material/leaderboard:")
-    st.page_link("pages/3_Players.py", label="Players", icon=":material/person:")
-    st.page_link("pages/4_Teams.py", label="Teams", icon=":material/shield:")
-    st.page_link("pages/5_Chat.py", label="AI Chat", icon=":material/chat:")
-
-    st.markdown("<hr style='border-color:rgba(255,255,255,0.08);margin:20px 0;'>", unsafe_allow_html=True)
-
-    st.markdown(
-        """
-        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
-                    border-radius:5px; padding:10px 12px;">
-          <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#5a8f4e;display:inline-block;"></span>
-            <span style="color:#5a8f4e; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Live</span>
-          </div>
-          <div style="color:#8896a8; font-size:11px; line-height:1.5;">
-            16 seasons · 850K+ records<br>Updated daily 09:00 CET
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ── Default page = Intelligence Feed ─────────────────────────────────────────
-import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
+from lib.sidebar import render as _render_sidebar
+_render_sidebar()
 
 from lib.db import query
 

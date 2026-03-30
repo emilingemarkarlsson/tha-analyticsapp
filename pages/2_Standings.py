@@ -5,8 +5,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 import pandas as pd
 from lib.db import query
+from lib.sidebar import render as _render_sidebar
 
 st.set_page_config(page_title="Standings – THA Analytics", layout="wide")
+_render_sidebar()
 
 st.markdown(
     "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>Standings</h1>"

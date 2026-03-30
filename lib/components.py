@@ -56,6 +56,33 @@ def methodology_note(text: str) -> None:
     )
 
 
+def perf_tier(z: float) -> tuple[str, str]:
+    """Return (label, hex_color) for a z-score — used for badges and text."""
+    if z >= 1.5:  return ("ELITE",     "#ff6b2b")
+    if z >= 0.8:  return ("HOT",       ORANGE)
+    if z >= 0.3:  return ("ABOVE AVG", GREEN)
+    if z > -0.3:  return ("STEADY",    MUTED)
+    if z > -0.8:  return ("BELOW AVG", "#6b8cad")
+    if z > -1.5:  return ("COLD",      BLUE)
+    return ("SLUMP", "#4a9eda")
+
+
+def tier_badge_html(z: float, show_z: bool = True) -> str:
+    """Render a performance tier badge + optional z-score value."""
+    label, color = perf_tier(z)
+    z_part = (
+        f"<span style='color:{color};font-family:monospace;font-size:11px;"
+        f"font-weight:700;margin-left:5px;'>{z:+.2f}σ</span>"
+        if show_z else ""
+    )
+    return (
+        f"<span style='background:{color}18;border:1px solid {color}44;"
+        f"color:{color};padding:2px 7px;border-radius:3px;font-size:10px;"
+        f"font-weight:700;letter-spacing:0.05em;white-space:nowrap;'>{label}</span>"
+        f"{z_part}"
+    )
+
+
 def zscore_legend(with_title: bool = True) -> None:
     """Standard z-score colour legend used on Players, Screener, Feed."""
     title = "<p style='font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#8896a8;margin-bottom:6px;'>Form legend (σ)</p>" if with_title else ""

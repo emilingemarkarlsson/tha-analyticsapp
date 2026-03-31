@@ -128,6 +128,7 @@ def render() -> None:
         st.page_link("pages/8_Player_History.py", label="Player History",   icon=":material/show_chart:")
         st.page_link("pages/9_Team_History.py",   label="Team History",     icon=":material/history:")
         st.page_link("pages/11_Goalies.py",        label="Goalies",          icon=":material/sports:")
+        st.page_link("pages/12_Playoffs.py",       label="Playoffs",         icon=":material/emoji_events:")
 
         # ── Nav group: Tools ───────────────────────────────────────────────────
         st.markdown(

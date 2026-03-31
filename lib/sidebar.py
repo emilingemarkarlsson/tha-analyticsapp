@@ -109,10 +109,35 @@ def render() -> None:
         st.page_link("pages/7_Watchlist.py", label="My Hockey Room", icon=":material/folder_special:")
         st.page_link("pages/5_Chat.py",      label="AI Chat",        icon=":material/chat:")
 
+        # ── Nav group: Account ─────────────────────────────────────────────────
+        st.markdown(
+            "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
+            "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
+            "margin:10px 0 2px;'>Account</p>",
+            unsafe_allow_html=True,
+        )
+        st.page_link("pages/10_Account.py", label="My Account", icon=":material/manage_accounts:")
+
         st.markdown(
             "<hr style='border-color:rgba(255,255,255,0.08);margin:16px 0;'>",
             unsafe_allow_html=True,
         )
+
+        # ── Logged-in user chip ────────────────────────────────────────────────
+        from lib.auth import get_user
+        user = get_user()
+        if user:
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:12px;'>"
+                f"<div style='background:#5a8f4e;border-radius:50%;width:22px;height:22px;"
+                f"display:flex;align-items:center;justify-content:center;"
+                f"font-size:10px;font-weight:800;color:#fff;flex-shrink:0;'>"
+                f"{user['email'][0].upper()}</div>"
+                f"<span style='color:#8896a8;font-size:11px;overflow:hidden;"
+                f"text-overflow:ellipsis;white-space:nowrap;'>{user['email']}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
         # ── Data status widget ─────────────────────────────────────────────────
         try:

@@ -106,11 +106,8 @@ with left:
 
 # ── RIGHT: Form ────────────────────────────────────────────────────────────────
 with right:
-    st.markdown("""
-    <div style="background:#0a0a0a; min-height:100vh; padding:60px 48px;
-                display:flex; flex-direction:column; justify-content:center;
-                border-left:1px solid rgba(255,255,255,0.06);">
-    """, unsafe_allow_html=True)
+    # Vertical spacer to roughly center the form with the left column
+    st.markdown("<div style='height:120px;'></div>", unsafe_allow_html=True)
 
     # Mode toggle: login / signup / forgot
     mode = st.session_state.get("auth_mode", "login")
@@ -218,4 +215,3 @@ with right:
                 st.session_state["auth_mode"] = "forgot"
                 st.rerun()
 
-    st.markdown("</div>", unsafe_allow_html=True)

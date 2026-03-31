@@ -30,22 +30,46 @@ input, textarea {
     color: #f1f5f9 !important;
     font-size: 14px !important;
 }
-div[data-testid="stButton"] button {
+/* Primary submit button */
+button[kind="primaryFormSubmit"],
+button[data-testid="baseButton-primaryFormSubmit"],
+div[data-testid="stFormSubmitButton"] > button {
     background: #5a8f4e !important;
     color: white !important;
     border: none !important;
     font-weight: 700 !important;
     border-radius: 6px !important;
     height: 44px !important;
-    font-size: 14px !important;
-    letter-spacing: 0.01em !important;
+    font-size: 15px !important;
+    width: 100% !important;
 }
-label[data-testid="stWidgetLabel"] p {
+/* Secondary buttons — text link style */
+button[kind="secondary"],
+button[data-testid="baseButton-secondary"],
+div[data-testid="stButton"] > button {
+    background: transparent !important;
     color: #8896a8 !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.06em !important;
+    border: none !important;
+    font-weight: 500 !important;
+    font-size: 13px !important;
+    padding: 4px 0 !important;
+    height: auto !important;
+    min-height: unset !important;
+    box-shadow: none !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+}
+div[data-testid="stButton"] > button:hover {
+    color: #fff !important;
+    background: transparent !important;
+}
+/* Labels — normal case */
+label p, .stTextInput label p, .stPassword label p {
+    color: #8896a8 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -145,10 +169,13 @@ with right:
                     st.success("Länk skickad — kolla din e-post.")
                 except Exception as e:
                     st.error(f"Fel: {e}")
-        st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-        if st.button("← Tillbaka", key="back_login", use_container_width=False):
-            st.session_state["auth_mode"] = "login"
-            st.rerun()
+        st.markdown(
+            "<div style='margin-top:12px;'>"
+            "<a href='/Login' target='_self' style='color:#8896a8;font-size:13px;"
+            "text-decoration:underline;text-underline-offset:3px;'>← Tillbaka</a>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     # ── Sign up ────────────────────────────────────────────────────────────────
     elif mode == "signup":
@@ -159,11 +186,14 @@ with right:
             "Gratis. Inget kreditkort krävs.</p>",
             unsafe_allow_html=True,
         )
-        new_email = st.text_input("E-post", placeholder="din@email.com", key="up_email")
-        new_pass  = st.text_input("Lösenord", type="password", placeholder="Minst 6 tecken", key="up_pass")
-        new_pass2 = st.text_input("Bekräfta lösenord", type="password", placeholder="Upprepa lösenordet", key="up_pass2")
-        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
-        if st.button("Skapa konto", use_container_width=True, key="btn_signup"):
+        with st.form("signup_form"):
+            new_email = st.text_input("E-post", placeholder="din@email.com")
+            new_pass  = st.text_input("Lösenord", type="password", placeholder="Minst 6 tecken")
+            new_pass2 = st.text_input("Bekräfta lösenord", type="password", placeholder="Upprepa lösenordet")
+            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("Skapa konto", use_container_width=True)
+
+        if submitted:
             if not new_email or not new_pass:
                 st.error("Fyll i e-post och lösenord.")
             elif new_pass != new_pass2:
@@ -184,26 +214,29 @@ with right:
                 else:
                     st.error(err)
         st.markdown(
-            "<p style='color:#8896a8;font-size:12px;margin-top:20px;'>Har du redan ett konto?</p>",
+            "<div style='margin-top:16px;'>"
+            "<a href='/Login' target='_self' style='color:#8896a8;font-size:13px;"
+            "text-decoration:underline;text-underline-offset:3px;'>← Logga in istället</a>"
+            "</div>",
             unsafe_allow_html=True,
         )
-        if st.button("Logga in istället →", key="go_login"):
-            st.session_state["auth_mode"] = "login"
-            st.rerun()
 
     # ── Login ──────────────────────────────────────────────────────────────────
     else:
         st.markdown(
             "<h2 style='color:#fff;font-size:24px;font-weight:800;"
             "letter-spacing:-0.02em;margin:64px 0 6px;'>Välkommen tillbaka</h2>"
-            "<p style='color:#8896a8;font-size:13px;margin:0 0 28px;'>"
+            "<p style='color:#8896a8;font-size:13px;margin:0 0 24px;'>"
             "Logga in för att fortsätta.</p>",
             unsafe_allow_html=True,
         )
-        email    = st.text_input("E-post", placeholder="din@email.com", key="in_email")
-        password = st.text_input("Lösenord", type="password", placeholder="••••••••", key="in_pass")
-        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
-        if st.button("Logga in", use_container_width=True, key="btn_login"):
+        with st.form("login_form"):
+            email    = st.text_input("E-post", placeholder="din@email.com")
+            password = st.text_input("Lösenord", type="password", placeholder="••••••••")
+            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("Logga in", use_container_width=True)
+
+        if submitted:
             if not email or not password:
                 st.error("Fyll i e-post och lösenord.")
             else:
@@ -214,18 +247,23 @@ with right:
                 else:
                     st.error(err)
 
-        st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
         st.markdown(
-            "<hr style='border:none;border-top:1px solid rgba(255,255,255,0.07);margin:0 0 20px;'>",
+            "<div style='margin-top:16px; display:flex; gap:24px;'>"
+            "<a href='/Login?mode=signup' target='_self' style='color:#8896a8;font-size:13px;"
+            "text-decoration:underline;text-underline-offset:3px;'>Skapa konto →</a>"
+            "<a href='/Login?mode=forgot' target='_self' style='color:#8896a8;font-size:13px;"
+            "text-decoration:underline;text-underline-offset:3px;'>Glömt lösenord?</a>"
+            "</div>",
             unsafe_allow_html=True,
         )
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Skapa konto", key="go_signup", use_container_width=True):
-                st.session_state["auth_mode"] = "signup"
-                st.rerun()
-        with c2:
-            if st.button("Glömt lösenord?", key="go_forgot", use_container_width=True):
-                st.session_state["auth_mode"] = "forgot"
-                st.rerun()
+        # Handle query param mode switching
+        qp = st.query_params
+        if qp.get("mode") == "signup":
+            st.session_state["auth_mode"] = "signup"
+            st.query_params.clear()
+            st.rerun()
+        elif qp.get("mode") == "forgot":
+            st.session_state["auth_mode"] = "forgot"
+            st.query_params.clear()
+            st.rerun()
 

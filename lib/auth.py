@@ -44,8 +44,8 @@ def sign_in(email: str, password: str) -> tuple[bool, str]:
     except Exception as e:
         msg = str(e)
         if "Invalid login" in msg or "invalid_credentials" in msg:
-            return False, "Fel e-post eller lösenord."
-        return False, f"Inloggningsfel: {msg}"
+            return False, "Invalid email or password."
+        return False, f"Sign-in error: {msg}"
 
 
 def sign_up(email: str, password: str) -> tuple[bool, str]:
@@ -54,13 +54,13 @@ def sign_up(email: str, password: str) -> tuple[bool, str]:
         sb = _get_client()
         res = sb.auth.sign_up({"email": email, "password": password})
         if res.user and res.user.identities == []:
-            return False, "Den e-postadressen används redan."
+            return False, "That email address is already registered."
         return True, ""
     except Exception as e:
         msg = str(e)
         if "Password should be" in msg:
-            return False, "Lösenordet måste vara minst 6 tecken."
-        return False, f"Fel vid registrering: {msg}"
+            return False, "Password must be at least 6 characters."
+        return False, f"Sign-up error: {msg}"
 
 
 def sign_out() -> None:

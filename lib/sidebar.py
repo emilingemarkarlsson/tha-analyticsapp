@@ -51,6 +51,35 @@ def render() -> None:
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+        /* ── Mobile responsiveness ──────────────────────── */
+        @media (max-width: 768px) {
+            /* Stack all column pairs on mobile */
+            [data-testid="stHorizontalBlock"] {
+                flex-wrap: wrap !important;
+            }
+            [data-testid="column"] {
+                width: 100% !important;
+                flex: 1 1 100% !important;
+                min-width: 100% !important;
+            }
+
+            /* Reduce main content padding on mobile */
+            [data-testid="block-container"] {
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 1rem !important;
+            }
+
+            /* Make metric cards readable on mobile */
+            [data-testid="stMetricValue"] {
+                font-size: 1.4rem !important;
+            }
+
+            /* Shrink page header font on mobile */
+            h1 { font-size: 1.4rem !important; }
+            h2 { font-size: 1.1rem !important; }
+        }
         </style>
         """,
         unsafe_allow_html=True,

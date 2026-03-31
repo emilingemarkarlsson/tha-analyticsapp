@@ -23,6 +23,24 @@ section[data-testid="stSidebar"] { display: none !important; }
 }
 [data-testid="stVerticalBlock"] { gap: 0 !important; }
 [data-testid="stColumn"] > div { padding: 0 !important; }
+
+/* ── Mobile: hide left panel, center form ── */
+@media (max-width: 768px) {
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    [data-testid="column"]:first-child {
+        display: none !important;
+    }
+    [data-testid="column"]:last-child {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        padding: 0 1.5rem !important;
+    }
+    [data-testid="block-container"] {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+}
 input, textarea {
     background: rgba(255,255,255,0.06) !important;
     border: 1px solid rgba(255,255,255,0.12) !important;
@@ -151,28 +169,28 @@ with right:
     if mode == "forgot":
         st.markdown(
             "<h2 style='color:#fff;font-size:24px;font-weight:800;"
-            "letter-spacing:-0.02em;margin:64px 0 6px;'>Reset password</h2>"
+            "letter-spacing:-0.02em;margin:64px 0 6px;'>Reset your password</h2>"
             "<p style='color:#8896a8;font-size:13px;margin:0 0 28px;'>"
-            "We'll send a reset link to your inbox.</p>",
+            "Enter your email and we'll send a reset link.</p>",
             unsafe_allow_html=True,
         )
-        reset_email = st.text_input("E-post", placeholder="din@email.com", key="reset_email")
+        reset_email = st.text_input("Email", placeholder="you@email.com", key="reset_email")
         if st.button("Send reset link", use_container_width=True):
             if not reset_email:
-                st.error("Fyll i din e-postadress.")
+                st.error("Please enter your email address.")
             else:
                 try:
                     _get_client().auth.reset_password_email(
                         reset_email,
                         options={"redirect_to": "http://localhost:8501/Account"},
                     )
-                    st.success("Länk skickad — kolla din e-post.")
+                    st.success("Reset link sent — check your inbox.")
                 except Exception as e:
-                    st.error(f"Fel: {e}")
+                    st.error(f"Error: {e}")
         st.markdown(
             "<div style='margin-top:12px;'>"
             "<a href='/Login' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>← Tillbaka</a>"
+            "text-decoration:underline;text-underline-offset:3px;'>← Back</a>"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -181,25 +199,25 @@ with right:
     elif mode == "signup":
         st.markdown(
             "<h2 style='color:#fff;font-size:24px;font-weight:800;"
-            "letter-spacing:-0.02em;margin:64px 0 6px;'>Skapa konto</h2>"
+            "letter-spacing:-0.02em;margin:64px 0 6px;'>Create account</h2>"
             "<p style='color:#8896a8;font-size:13px;margin:0 0 28px;'>"
-            "Gratis. Inget kreditkort krävs.</p>",
+            "Free. No credit card required.</p>",
             unsafe_allow_html=True,
         )
         with st.form("signup_form"):
-            new_email = st.text_input("E-post", placeholder="din@email.com")
-            new_pass  = st.text_input("Lösenord", type="password", placeholder="Minst 6 tecken")
-            new_pass2 = st.text_input("Bekräfta lösenord", type="password", placeholder="Upprepa lösenordet")
+            new_email = st.text_input("Email", placeholder="you@email.com")
+            new_pass  = st.text_input("Password", type="password", placeholder="At least 6 characters")
+            new_pass2 = st.text_input("Confirm password", type="password", placeholder="Repeat password")
             st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
-            submitted = st.form_submit_button("Skapa konto", use_container_width=True)
+            submitted = st.form_submit_button("Create account", use_container_width=True)
 
         if submitted:
             if not new_email or not new_pass:
-                st.error("Fyll i e-post och lösenord.")
+                st.error("Please enter your email and password.")
             elif new_pass != new_pass2:
-                st.error("Lösenorden matchar inte.")
+                st.error("Passwords don't match.")
             elif len(new_pass) < 6:
-                st.error("Lösenordet måste vara minst 6 tecken.")
+                st.error("Password must be at least 6 characters.")
             else:
                 with st.spinner(""):
                     ok, err = sign_up(new_email, new_pass)
@@ -208,7 +226,7 @@ with right:
                     if ok2:
                         st.switch_page("app.py")
                     else:
-                        st.success("Konto skapat! Logga in nedan.")
+                        st.success("Account created! Sign in below.")
                         st.session_state["auth_mode"] = "login"
                         st.rerun()
                 else:
@@ -216,7 +234,7 @@ with right:
         st.markdown(
             "<div style='margin-top:16px;'>"
             "<a href='/Login' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>← Logga in istället</a>"
+            "text-decoration:underline;text-underline-offset:3px;'>← Sign in instead</a>"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -225,20 +243,20 @@ with right:
     else:
         st.markdown(
             "<h2 style='color:#fff;font-size:24px;font-weight:800;"
-            "letter-spacing:-0.02em;margin:64px 0 6px;'>Välkommen tillbaka</h2>"
+            "letter-spacing:-0.02em;margin:64px 0 6px;'>Welcome back</h2>"
             "<p style='color:#8896a8;font-size:13px;margin:0 0 24px;'>"
-            "Logga in för att fortsätta.</p>",
+            "Sign in to continue.</p>",
             unsafe_allow_html=True,
         )
         with st.form("login_form"):
-            email    = st.text_input("E-post", placeholder="din@email.com")
-            password = st.text_input("Lösenord", type="password", placeholder="••••••••")
+            email    = st.text_input("Email", placeholder="you@email.com")
+            password = st.text_input("Password", type="password", placeholder="••••••••")
             st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
-            submitted = st.form_submit_button("Logga in", use_container_width=True)
+            submitted = st.form_submit_button("Sign in", use_container_width=True)
 
         if submitted:
             if not email or not password:
-                st.error("Fyll i e-post och lösenord.")
+                st.error("Please enter your email and password.")
             else:
                 with st.spinner(""):
                     ok, err = sign_in(email, password)
@@ -250,9 +268,9 @@ with right:
         st.markdown(
             "<div style='margin-top:16px; display:flex; gap:24px;'>"
             "<a href='/Login?mode=signup' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>Skapa konto →</a>"
+            "text-decoration:underline;text-underline-offset:3px;'>Create account →</a>"
             "<a href='/Login?mode=forgot' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>Glömt lösenord?</a>"
+            "text-decoration:underline;text-underline-offset:3px;'>Forgot password?</a>"
             "</div>",
             unsafe_allow_html=True,
         )

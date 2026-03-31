@@ -48,28 +48,28 @@ st.markdown(
 col, _ = st.columns([1, 2])
 with col:
     new_pw = st.text_input("New password", type="password", key="new_pw",
-                            placeholder="Minst 6 tecken")
+                            placeholder="At least 6 characters")
     new_pw2 = st.text_input("Confirm password", type="password", key="new_pw2",
-                             placeholder="Upprepa lösenordet")
+                             placeholder="Repeat password")
     if st.button("Update password", key="btn_update_pw"):
         if not new_pw:
-            st.error("Fyll i ett nytt lösenord.")
+            st.error("Please enter a new password.")
         elif new_pw != new_pw2:
-            st.error("Lösenorden matchar inte.")
+            st.error("Passwords don't match.")
         elif len(new_pw) < 6:
-            st.error("Minst 6 tecken.")
+            st.error("Password must be at least 6 characters.")
         else:
             try:
                 sb = _get_client()
                 sb.auth.update_user({"password": new_pw})
-                st.success("Lösenord uppdaterat.")
+                st.success("Password updated.")
             except Exception as e:
-                st.error(f"Fel: {e}")
+                st.error(f"Error: {e}")
 
 st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
 
 # ── Sign out ───────────────────────────────────────────────────────────────────
-if st.button("Logga ut", key="btn_logout"):
+if st.button("Sign out", key="btn_logout"):
     sign_out()
     st.switch_page("pages/0_Login.py")
 

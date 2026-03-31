@@ -7,9 +7,11 @@ import pandas as pd
 from lib.db import query_fresh
 from lib.litellm_client import text_to_sql, fix_sql, summarise
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 
 st.set_page_config(page_title="AI Chat – THA Analytics", layout="wide")
 _render_sidebar()
+require_login()
 
 st.markdown(
     "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>AI Chat</h1>"

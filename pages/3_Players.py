@@ -6,10 +6,12 @@ import streamlit as st
 import pandas as pd
 from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
 
 st.set_page_config(page_title="Players – THA Analytics", layout="wide")
 _render_sidebar()
+require_login()
 
 page_header("Players", "Current season form · 5-game vs 20-game baseline z-score", data_date=get_data_date())
 zscore_legend()

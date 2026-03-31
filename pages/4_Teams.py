@@ -7,10 +7,12 @@ import pandas as pd
 import plotly.graph_objects as go
 from lib.db import query, query_fresh, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 from lib.components import data_source_footer, methodology_note
 
 st.set_page_config(page_title="Teams – THA Analytics", layout="wide")
 _render_sidebar()
+require_login()
 
 ALL_TEAMS = [
     "ANA","ARI","BOS","BUF","CAR","CGY","CHI","COL","CBJ","DAL",

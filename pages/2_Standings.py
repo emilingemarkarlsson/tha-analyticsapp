@@ -6,10 +6,12 @@ import streamlit as st
 import pandas as pd
 from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 from lib.components import page_header, data_source_footer
 
 st.set_page_config(page_title="Standings – THA Analytics", layout="wide")
 _render_sidebar()
+require_login()
 
 page_header("Standings", "Current season · Regular season", data_date=get_data_date())
 

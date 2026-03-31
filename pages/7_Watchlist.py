@@ -6,10 +6,12 @@ import streamlit as st
 import pandas as pd
 from lib.db import query_fresh
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 from lib import userdb
 
 st.set_page_config(page_title="Watchlist – THA Analytics", layout="wide")
 _render_sidebar()
+require_login()
 
 st.markdown(
     "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>My Hockey Room</h1>"

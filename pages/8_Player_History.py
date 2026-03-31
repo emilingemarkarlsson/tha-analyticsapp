@@ -9,10 +9,12 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from lib.db import query_fresh, player_career, get_data_date
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 from lib.components import page_header, methodology_note, projection_disclaimer, data_source_footer, zscore_legend
 
 st.set_page_config(page_title="Player History – THA Analytics", layout="wide")
 _render_sidebar()
+require_login()
 
 from lib.db import query
 from lib.components import tier_badge_html

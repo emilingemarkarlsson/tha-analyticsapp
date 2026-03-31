@@ -12,7 +12,9 @@ st.set_page_config(
 )
 
 from lib.sidebar import render as _render_sidebar
+from lib.auth import require_login
 _render_sidebar()
+require_login()
 
 from lib.db import query, get_data_date
 from lib.components import data_source_footer, zscore_legend

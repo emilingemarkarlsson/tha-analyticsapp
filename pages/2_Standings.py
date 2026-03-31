@@ -21,12 +21,14 @@ CONF_MAP = {"A": "E", "M": "E", "C": "W", "P": "W"}
 
 try:
     df = query("""
-        SELECT teamAbbrev, wins, losses, otLosses, points, gamesPlayed,
-               goalFor, goalAgainst, divisionAbbrev, conferenceAbbrev,
-               streakCode, streakCount
-        FROM standings
-        WHERE season = (SELECT MAX(season) FROM standings)
-        ORDER BY divisionAbbrev, points DESC
+        SELECT st.teamAbbrev, st.wins, st.losses, st.otLosses, st.points, st.gamesPlayed,
+               st.goalFor, st.goalAgainst, st.divisionAbbrev, st.conferenceAbbrev,
+               st.streakCode, st.streakCount,
+               ts.powerPlayPct, ts.penaltyKillPct
+        FROM standings st
+        LEFT JOIN team_stats ts ON ts.teamFullName = st.teamName AND ts.season = st.season
+        WHERE st.season = (SELECT MAX(season) FROM standings)
+        ORDER BY st.divisionAbbrev, st.points DESC
         LIMIT 40
     """)
 except Exception as e:
@@ -35,6 +37,8 @@ except Exception as e:
 
 df["DIFF"] = df["goalFor"].astype(int) - df["goalAgainst"].astype(int)
 df["STREAK"] = df["streakCode"].astype(str) + df["streakCount"].astype(str)
+df["PP"] = (df["powerPlayPct"].fillna(0) * 100).round(1)
+df["PK"] = (df["penaltyKillPct"].fillna(0) * 100).round(1)
 
 # Build conference-wide WC tables
 def get_playoff_status(row: pd.Series, df_all: pd.DataFrame) -> str:
@@ -88,6 +92,10 @@ def _division_html(div_df: pd.DataFrame, div: str, conf_label: str) -> str:
             badge = "<span style='color:#5a8f4e;border:1px solid #5a8f4e;padding:0 4px;border-radius:2px;font-size:9px;font-weight:700;margin-right:4px;'>DIV</span>"
         elif status == "WC":
             badge = "<span style='color:#87ceeb;border:1px solid #87ceeb;padding:0 4px;border-radius:2px;font-size:9px;font-weight:700;margin-right:4px;'>WC</span>"
+        pp_val  = float(row["PP"]) if row["PP"] else 0.0
+        pk_val  = float(row["PK"]) if row["PK"] else 0.0
+        pp_color = "#f97316" if pp_val >= 25 else ("#5a8f4e" if pp_val >= 20 else "#8896a8")
+        pk_color = "#f97316" if pk_val >= 83 else ("#5a8f4e" if pk_val >= 78 else "#8896a8")
         bg = "rgba(255,255,255,0.02)" if idx % 2 == 0 else "transparent"
         rows_html += (
             f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);background:{bg};">'
@@ -102,6 +110,8 @@ def _division_html(div_df: pd.DataFrame, div: str, conf_label: str) -> str:
             f'<td style="text-align:center;padding:8px 6px;color:#8896a8;font-size:12px;">{int(row["otLosses"])}</td>'
             f'<td style="text-align:center;padding:8px 6px;color:#5a8f4e;font-weight:700;font-size:12px;">{int(row["points"])}</td>'
             f'<td style="text-align:center;padding:8px 6px;color:{diff_color};font-family:monospace;font-size:11px;">{diff_str}</td>'
+            f'<td style="text-align:center;padding:8px 6px;color:{pp_color};font-family:monospace;font-size:11px;">{pp_val:.1f}%</td>'
+            f'<td style="text-align:center;padding:8px 6px;color:{pk_color};font-family:monospace;font-size:11px;">{pk_val:.1f}%</td>'
             f'<td style="text-align:center;padding:8px 6px;color:#8896a8;font-family:monospace;font-size:11px;">{row["STREAK"]}</td>'
             f'</tr>'
         )
@@ -123,6 +133,8 @@ def _division_html(div_df: pd.DataFrame, div: str, conf_label: str) -> str:
         f'<th style="text-align:center;padding:7px 6px;color:#8896a8;font-size:10px;font-weight:600;">OTL</th>'
         f'<th style="text-align:center;padding:7px 6px;color:#5a8f4e;font-size:10px;font-weight:700;">PTS</th>'
         f'<th style="text-align:center;padding:7px 6px;color:#8896a8;font-size:10px;font-weight:600;">DIFF</th>'
+        f'<th style="text-align:center;padding:7px 6px;color:#f97316;font-size:10px;font-weight:600;">PP%</th>'
+        f'<th style="text-align:center;padding:7px 6px;color:#87ceeb;font-size:10px;font-weight:600;">PK%</th>'
         f'<th style="text-align:center;padding:7px 6px;color:#8896a8;font-size:10px;font-weight:600;">STK</th>'
         f'</tr></thead>'
         f'<tbody>{rows_html}</tbody>'

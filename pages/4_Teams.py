@@ -33,6 +33,15 @@ try:
         WHERE team_abbr = '{team}' AND game_recency_rank = 1
         LIMIT 1
     """)
+    df_team_stats = query_fresh(f"""
+        SELECT ts.powerPlayPct, ts.penaltyKillPct,
+               ts.shotsForPerGame, ts.shotsAgainstPerGame, ts.faceoffWinPct
+        FROM team_stats ts
+        JOIN standings st ON st.teamName = ts.teamFullName AND st.season = ts.season
+        WHERE st.teamAbbrev = '{team}'
+          AND ts.season = (SELECT MAX(season) FROM team_stats)
+        LIMIT 1
+    """)
     df_games = query_fresh(f"""
         SELECT game_date, opponent_abbr, is_home, goals_for, goals_against, team_points
         FROM team_game_stats
@@ -69,6 +78,50 @@ if not df_season.empty:
         st.metric("GF / 10", f"{float(row['gf_avg_10g']):.2f}", f"GA: {float(row['ga_avg_10g']):.2f}")
     with c4:
         st.metric("Form", fz_str, "5 vs 20 game")
+
+# ── Special teams row ─────────────────────────────────────────────────────────
+if not df_team_stats.empty:
+    ts = df_team_stats.iloc[0]
+    pp_pct = float(ts["powerPlayPct"]) * 100
+    pk_pct = float(ts["penaltyKillPct"]) * 100
+    sf_g   = float(ts["shotsForPerGame"])
+    sa_g   = float(ts["shotsAgainstPerGame"])
+    fo_pct = float(ts["faceoffWinPct"]) * 100
+
+    pp_color = "#f97316" if pp_pct >= 25 else ("#5a8f4e" if pp_pct >= 20 else "#8896a8")
+    pk_color = "#f97316" if pk_pct >= 83 else ("#5a8f4e" if pk_pct >= 78 else "#8896a8")
+    sf_color = "#5a8f4e" if sf_g >= 32 else ("#8896a8" if sf_g >= 28 else "#87ceeb")
+
+    st.markdown(
+        f"""<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                      border-radius:5px;padding:8px 16px;min-width:80px;">
+            <div style="color:#8896a8;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">PP%</div>
+            <div style="color:{pp_color};font-weight:800;font-size:18px;">{pp_pct:.1f}<span style="font-size:11px;font-weight:400;">%</span></div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                      border-radius:5px;padding:8px 16px;min-width:80px;">
+            <div style="color:#8896a8;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">PK%</div>
+            <div style="color:{pk_color};font-weight:800;font-size:18px;">{pk_pct:.1f}<span style="font-size:11px;font-weight:400;">%</span></div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                      border-radius:5px;padding:8px 16px;min-width:80px;">
+            <div style="color:#8896a8;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">SF/g</div>
+            <div style="color:{sf_color};font-weight:800;font-size:18px;">{sf_g:.1f}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                      border-radius:5px;padding:8px 16px;min-width:80px;">
+            <div style="color:#8896a8;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">SA/g</div>
+            <div style="color:#8896a8;font-weight:800;font-size:18px;">{sa_g:.1f}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                      border-radius:5px;padding:8px 16px;min-width:80px;">
+            <div style="color:#8896a8;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">FO%</div>
+            <div style="color:#8896a8;font-weight:800;font-size:18px;">{fo_pct:.1f}<span style="font-size:11px;font-weight:400;">%</span></div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 

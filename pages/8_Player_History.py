@@ -146,10 +146,27 @@ else:
     # Clear direct-selection so search takes over
     st.session_state.pop("ph_selected_id", None)
 
-# ── Load career data ───────────────────────────────────────────────────────────
+# ── Load career data + bio + advanced stats ────────────────────────────────────
 try:
     with st.spinner("Loading career data…"):
         df = player_career(player_id)
+        df_bio = query_fresh(f"""
+            SELECT firstName, lastName, positionCode, sweaterNumber,
+                   heightInCentimeters, weightInKilograms,
+                   birthDate, birthCity, birthCountry, headshot
+            FROM players
+            WHERE id = {player_id}
+            LIMIT 1
+        """)
+        df_skater = query_fresh(f"""
+            SELECT season, plusMinus, ppGoals, ppPoints,
+                   ROUND(shootingPct * 100, 1) AS shootingPct,
+                   ROUND(faceoffWinPct * 100, 1) AS faceoffWinPct,
+                   penaltyMinutes
+            FROM skater_stats
+            WHERE playerId = {player_id}
+            ORDER BY season
+        """)
 except Exception as e:
     st.error(f"Database error: {e}")
     st.stop()
@@ -158,8 +175,18 @@ if df.empty:
     st.info(f"No regular-season game data found for {player_name}.")
     st.stop()
 
-# ── Derived metrics ────────────────────────────────────────────────────────────
+# ── Merge advanced stats from skater_stats ────────────────────────────────────
 df = df.copy()
+if not df_skater.empty:
+    df = df.merge(df_skater, on="season", how="left")
+else:
+    df["plusMinus"] = None
+    df["ppPoints"]  = None
+    df["shootingPct"] = None
+    df["faceoffWinPct"] = None
+    df["penaltyMinutes"] = None
+
+# ── Derived metrics ────────────────────────────────────────────────────────────
 df["pts_per_82"]  = df["points"] / df["gp"] * 82
 df["goals_per_82"] = df["goals"] / df["gp"] * 82
 df["assists_per_82"] = df["assists"] / df["gp"] * 82
@@ -225,10 +252,50 @@ latest_cpi = float(df["cpi"].iloc[-1])
 
 st.markdown(
     f"<h2 style='font-size:22px;font-weight:900;letter-spacing:-0.02em;margin:4px 0 2px;'>{player_name}</h2>"
-    f"<p style='color:#8896a8;font-size:13px;margin-bottom:16px;'>"
+    f"<p style='color:#8896a8;font-size:13px;margin-bottom:12px;'>"
     f"{player_pos} · {seasons_count} NHL seasons</p>",
     unsafe_allow_html=True,
 )
+
+# ── Bio card ──────────────────────────────────────────────────────────────────
+if not df_bio.empty:
+    b = df_bio.iloc[0]
+    height_cm = int(b["heightInCentimeters"]) if b["heightInCentimeters"] else 0
+    weight_kg = int(b["weightInKilograms"]) if b["weightInKilograms"] else 0
+    # Convert to ft/in and lbs for readability
+    feet, inches = divmod(round(height_cm / 2.54), 12)
+    lbs = round(weight_kg * 2.205)
+    birth = str(b["birthDate"])[:10] if b["birthDate"] else "—"
+    city = b["birthCity"] or ""
+    country = b["birthCountry"] or ""
+    num = int(b["sweaterNumber"]) if b["sweaterNumber"] else 0
+    headshot = str(b["headshot"]) if b["headshot"] else ""
+    bio_details = f"#{num} · {feet}'{inches}\" · {lbs} lbs · Born {birth}"
+    if city or country:
+        bio_details += f" · {city}, {country}"
+
+    img_html = (
+        f'<img src="{headshot}" style="width:72px;height:72px;border-radius:50%;'
+        f'object-fit:cover;border:2px solid rgba(90,143,78,0.4);" onerror="this.style.display=\'none\'">'
+        if headshot else
+        f'<div style="width:72px;height:72px;border-radius:50%;background:#5a8f4e;'
+        f'display:flex;align-items:center;justify-content:center;'
+        f'font-weight:900;font-size:24px;color:#fff;">{player_name[0]}</div>'
+    )
+    st.markdown(
+        f"""<div style="display:flex;align-items:center;gap:16px;
+                        background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+                        border-radius:6px;padding:12px 16px;margin-bottom:20px;max-width:560px;">
+          {img_html}
+          <div>
+            <div style="color:#fff;font-weight:700;font-size:15px;margin-bottom:2px;">{player_name}</div>
+            <div style="color:#5a8f4e;font-size:11px;font-weight:600;text-transform:uppercase;
+                        letter-spacing:0.06em;margin-bottom:4px;">{b['positionCode']} · {country}</div>
+            <div style="color:#8896a8;font-size:11px;line-height:1.6;">{bio_details}</div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 # Career summary bar
 st.markdown(
@@ -638,6 +705,19 @@ for _, r in df.sort_values("season_year", ascending=False).iterrows():
     cpi_val = float(r["cpi"])
     gp_val = int(r["gp"])
     gp_color = "#5a8f4e" if gp_val >= 70 else ("#f97316" if gp_val >= 50 else "#c41e3a")
+
+    # Advanced stats from skater_stats (may be null for older/missing seasons)
+    pm_val  = r.get("plusMinus")
+    pp_val  = r.get("ppPoints")
+    sh_val  = r.get("shootingPct")
+    fo_val  = r.get("faceoffWinPct")
+
+    pm_str  = (f'+{int(pm_val)}' if pm_val > 0 else str(int(pm_val))) if pd.notna(pm_val) else '—'
+    pm_color = "#5a8f4e" if (pd.notna(pm_val) and pm_val > 0) else ("#c41e3a" if (pd.notna(pm_val) and pm_val < 0) else "#8896a8")
+    pp_str  = str(int(pp_val)) if pd.notna(pp_val) else '—'
+    sh_str  = f'{sh_val:.1f}%' if pd.notna(sh_val) else '—'
+    fo_str  = f'{fo_val:.1f}%' if pd.notna(fo_val) and fo_val > 0 else '—'
+
     rows += (
         f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
         f'<td style="padding:8px 14px;color:#fff;font-weight:600;font-size:12px;">{r["season_label"]}</td>'
@@ -645,6 +725,10 @@ for _, r in df.sort_values("season_year", ascending=False).iterrows():
         f'<td style="padding:8px 8px;color:#fff;font-size:12px;text-align:center;">{int(r["goals"])}</td>'
         f'<td style="padding:8px 8px;color:#8896a8;font-size:12px;text-align:center;">{int(r["assists"])}</td>'
         f'<td style="padding:8px 8px;color:#5a8f4e;font-weight:700;font-size:12px;text-align:center;">{int(r["points"])}</td>'
+        f'<td style="padding:8px 8px;color:{pm_color};font-family:monospace;font-size:12px;text-align:center;">{pm_str}</td>'
+        f'<td style="padding:8px 8px;color:#87ceeb;font-size:12px;text-align:center;">{pp_str}</td>'
+        f'<td style="padding:8px 8px;color:#8896a8;font-size:12px;text-align:center;">{sh_str}</td>'
+        f'<td style="padding:8px 8px;color:#8896a8;font-size:12px;text-align:center;">{fo_str}</td>'
         f'<td style="padding:8px 8px;color:#f97316;font-size:12px;text-align:center;">{r["pts_per_82"]:.0f}</td>'
         f'<td style="padding:8px 8px;color:#87ceeb;font-size:12px;text-align:center;">{r["avg_toi_min"]:.1f}</td>'
         f'<td style="padding:8px 8px;color:{p60_color};font-family:monospace;font-weight:700;font-size:12px;text-align:center;">{p60_val:.2f}</td>'
@@ -662,7 +746,7 @@ if has_projection:
             f'background:rgba(90,143,78,0.04);opacity:0.7;">'
             f'<td style="padding:8px 14px;color:#5a8f4e;font-style:italic;font-size:12px;">'
             f'{lbl} <span style="font-size:10px;color:#5a8f4e33;">(proj)</span></td>'
-            f'<td colspan="4" style="padding:8px 8px;color:#8896a8;font-size:11px;text-align:center;">—</td>'
+            f'<td colspan="8" style="padding:8px 8px;color:#8896a8;font-size:11px;text-align:center;">—</td>'
             f'<td style="padding:8px 8px;color:#5a8f4e;font-size:12px;text-align:center;font-style:italic;">{p_val:.0f}</td>'
             f'<td style="padding:8px 8px;color:#8896a8;text-align:center;">—</td>'
             f'<td style="padding:8px 8px;color:#8896a8;text-align:center;">—</td>'
@@ -679,6 +763,10 @@ st.html(
     f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">G</th>'
     f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">A</th>'
     f'<th style="padding:8px 8px;color:#5a8f4e;font-size:10px;font-weight:700;text-align:center;">PTS</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">+/-</th>'
+    f'<th style="padding:8px 8px;color:#87ceeb;font-size:10px;font-weight:600;text-align:center;">PPP</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">SH%</th>'
+    f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">FO%</th>'
     f'<th style="padding:8px 8px;color:#f97316;font-size:10px;font-weight:600;text-align:center;">PTS/82</th>'
     f'<th style="padding:8px 8px;color:#87ceeb;font-size:10px;font-weight:600;text-align:center;">TOI/g</th>'
     f'<th style="padding:8px 8px;color:#8896a8;font-size:10px;font-weight:700;text-align:center;">P/60</th>'
@@ -691,6 +779,7 @@ st.markdown(
     "<p style='color:#8896a8;font-size:10px;margin-top:8px;'>"
     "PTS/82 = points pace over full 82-game season · "
     "P/60 = points per 60 min TOI (efficiency) · "
+    "PPP = power-play points · SH% = shooting % · FO% = faceoff win % · "
     "CPI = composite index (P/60 × deployment × durability). "
     "Projected rows use polynomial regression on last 6 healthy seasons.</p>",
     unsafe_allow_html=True,

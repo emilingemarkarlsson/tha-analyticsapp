@@ -121,11 +121,13 @@ def render() -> None:
             unsafe_allow_html=True,
         )
         st.page_link("app.py",                    label="Intelligence Feed", icon=":material/trending_up:")
+        st.page_link("pages/1_Terminal.py",        label="Terminal",          icon=":material/terminal:")
         st.page_link("pages/2_Standings.py",      label="Standings",        icon=":material/leaderboard:")
         st.page_link("pages/3_Players.py",        label="Players",          icon=":material/person:")
         st.page_link("pages/4_Teams.py",          label="Teams",            icon=":material/shield:")
         st.page_link("pages/8_Player_History.py", label="Player History",   icon=":material/show_chart:")
         st.page_link("pages/9_Team_History.py",   label="Team History",     icon=":material/history:")
+        st.page_link("pages/11_Goalies.py",        label="Goalies",          icon=":material/sports:")
 
         # ── Nav group: Tools ───────────────────────────────────────────────────
         st.markdown(

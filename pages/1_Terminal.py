@@ -214,6 +214,67 @@ def _team_games(abbr) -> pd.DataFrame:
         ORDER BY game_date DESC LIMIT 12
     """)
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def _player_splits(pid) -> dict:
+    """Home/Away + EV/PP/SH splits for a skater."""
+    ha = query_fresh(f"""
+        SELECT is_home,
+               COUNT(*)                           AS gp,
+               SUM(goals)                         AS g,
+               SUM(assists)                       AS a,
+               SUM(goals+assists)                 AS pts,
+               ROUND(AVG(goals+assists), 2)       AS avg_pts,
+               ROUND(AVG(toi_seconds/60.0), 1)    AS avg_toi
+        FROM player_game_stats
+        WHERE player_id={pid} AND is_home IS NOT NULL
+          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
+        GROUP BY is_home
+    """)
+    sit = query_fresh(f"""
+        SELECT evGoals, evPoints, ppGoals, ppPoints, shGoals, shPoints,
+               timeOnIcePerGame, shots, gameWinningGoals, otGoals
+        FROM skater_stats
+        WHERE playerId={pid}
+          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
+        LIMIT 1
+    """)
+    return {"ha": ha, "sit": sit}
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _goalie_splits(pid) -> pd.DataFrame:
+    """Home/Away splits for a goalie."""
+    return query_fresh(f"""
+        SELECT is_home,
+               COUNT(*)                                         AS gp,
+               SUM(saves)                                       AS sv,
+               SUM(shots_against)                               AS sa,
+               SUM(goals_against)                               AS ga,
+               ROUND(SUM(saves)*100.0/NULLIF(SUM(shots_against),0), 2) AS sv_pct,
+               ROUND(SUM(goals_against)*3600.0/NULLIF(SUM(toi_seconds),0), 2) AS gaa
+        FROM goalie_rolling_stats
+        WHERE player_id={pid} AND is_home IS NOT NULL
+          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
+        GROUP BY is_home
+    """)
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _team_splits(abbr) -> pd.DataFrame:
+    """Home/Away splits for a team."""
+    return query_fresh(f"""
+        SELECT is_home,
+               COUNT(*)                                                               AS gp,
+               SUM(CASE WHEN TRY_CAST(team_points AS INTEGER)=2 THEN 1 ELSE 0 END)  AS w,
+               SUM(CASE WHEN TRY_CAST(team_points AS INTEGER)=1 THEN 1 ELSE 0 END)  AS otl,
+               SUM(CASE WHEN TRY_CAST(team_points AS INTEGER)=0 THEN 1 ELSE 0 END)  AS l,
+               ROUND(AVG(TRY_CAST(goals_for  AS DOUBLE)), 2)                         AS gf_avg,
+               ROUND(AVG(TRY_CAST(goals_against AS DOUBLE)), 2)                      AS ga_avg,
+               SUM(TRY_CAST(team_points AS INTEGER))                                 AS pts
+        FROM team_game_stats
+        WHERE team_abbr='{abbr}' AND game_type='2'
+          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
+        GROUP BY is_home
+    """)
+
 @st.cache_data(ttl=900, show_spinner=False)
 def _ai_insight(name: str, team: str) -> str:
     df = query_fresh(f"""
@@ -687,13 +748,115 @@ with col_center:
 
                 # ── SPLITS TAB ─────────────────────────────────────────────────
                 elif tab == "Splits":
-                    st.markdown(
-                        "<p style='color:#8896a8;font-size:11px;margin-top:16px;'>Home/Away and special teams "
-                        "splits coming in next update. Use Career tab for season-by-season data.</p>",
-                        unsafe_allow_html=True,
-                    )
-                    st.page_link("pages/8_Player_History.py", label="→ Full Player History page",
-                                 icon=":material/show_chart:")
+                    splits = _player_splits(int(sel_id))
+                    ha_df  = splits["ha"]
+                    sit_df = splits["sit"]
+
+                    _panel_header("Home vs Away — current season")
+
+                    home_row = ha_df[ha_df["is_home"] == True]
+                    away_row = ha_df[ha_df["is_home"] == False]
+                    h = home_row.iloc[0] if not home_row.empty else None
+                    a = away_row.iloc[0] if not away_row.empty else None
+
+                    def _ha_val(r, col, fmt=None):
+                        if r is None or pd.isna(r[col]): return "—"
+                        v = r[col]
+                        return fmt(v) if fmt else str(int(v))
+
+                    ha_stats = [
+                        ("GP",    _ha_val(h,"gp"),                  _ha_val(a,"gp"),                  "#8896a8"),
+                        ("G",     _ha_val(h,"g"),                   _ha_val(a,"g"),                   "#fff"),
+                        ("A",     _ha_val(h,"a"),                   _ha_val(a,"a"),                   "#8896a8"),
+                        ("PTS",   _ha_val(h,"pts"),                  _ha_val(a,"pts"),                  "#5a8f4e"),
+                        ("Avg",   _ha_val(h,"avg_pts",lambda v:f"{v:.2f}"), _ha_val(a,"avg_pts",lambda v:f"{v:.2f}"), "#f97316"),
+                        ("TOI",   _ha_val(h,"avg_toi",lambda v:f"{v:.1f}"), _ha_val(a,"avg_toi",lambda v:f"{v:.1f}"), "#8896a8"),
+                    ]
+
+                    # Header row
+                    st.html("""
+                    <div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;margin-bottom:4px;">
+                      <div></div>
+                      <div style="text-align:center;color:#5a8f4e;font-size:9px;font-weight:700;
+                                  text-transform:uppercase;letter-spacing:0.08em;">Home</div>
+                      <div style="text-align:center;color:#87ceeb;font-size:9px;font-weight:700;
+                                  text-transform:uppercase;letter-spacing:0.08em;">Away</div>
+                    </div>
+                    """)
+
+                    rows_ha = ""
+                    for label, hv, av, col in ha_stats:
+                        h_bold = "font-weight:700;" if label in ("PTS","Avg") else ""
+                        a_bold = "font-weight:700;" if label in ("PTS","Avg") else ""
+                        # Highlight the better side
+                        def _pick_c(hv, av, col, higher_is_better=True):
+                            try:
+                                hf, af = float(hv.replace("—","nan")), float(av.replace("—","nan"))
+                                if hf > af: return col, "#8896a8"
+                                if af > hf: return "#8896a8", col
+                            except Exception:
+                                pass
+                            return col, col
+                        hc, ac = _pick_c(hv, av, col)
+                        rows_ha += (
+                            f'<div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;'
+                            f'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                            f'<div style="color:#8896a8;font-size:9px;text-transform:uppercase;'
+                            f'letter-spacing:0.06em;align-self:center;">{label}</div>'
+                            f'<div style="text-align:center;color:{hc};font-family:monospace;'
+                            f'font-size:14px;{h_bold}">{hv}</div>'
+                            f'<div style="text-align:center;color:{ac};font-family:monospace;'
+                            f'font-size:14px;{a_bold}">{av}</div>'
+                            f'</div>'
+                        )
+                    st.html(f'<div style="margin-bottom:16px;">{rows_ha}</div>')
+
+                    # ── Situation splits ─────────────────────────────────
+                    _panel_header("Situation — current season")
+                    if not sit_df.empty:
+                        s = sit_df.iloc[0]
+                        def _sv(col):
+                            return str(int(s[col])) if pd.notna(s[col]) else "—"
+                        ev_g  = _sv("evGoals");  ev_p  = _sv("evPoints")
+                        pp_g  = _sv("ppGoals");  pp_p  = _sv("ppPoints")
+                        sh_g  = _sv("shGoals");  sh_p  = _sv("shPoints")
+                        gwg   = _sv("gameWinningGoals")
+                        otg   = _sv("otGoals")
+                        shots = _sv("shots")
+
+                        st.html(f"""
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+                          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                                      border-radius:4px;padding:10px;text-align:center;">
+                            <div style="color:#8896a8;font-size:9px;text-transform:uppercase;
+                                        letter-spacing:0.08em;margin-bottom:6px;">Even Strength</div>
+                            <div style="color:#fff;font-size:18px;font-weight:900;font-family:monospace;">{ev_p}</div>
+                            <div style="color:#8896a8;font-size:9px;">pts</div>
+                            <div style="color:#8896a8;font-size:10px;margin-top:4px;">{ev_g} G</div>
+                          </div>
+                          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(247,151,22,0.25);
+                                      border-radius:4px;padding:10px;text-align:center;">
+                            <div style="color:#f97316;font-size:9px;text-transform:uppercase;
+                                        letter-spacing:0.08em;margin-bottom:6px;">Power Play</div>
+                            <div style="color:#f97316;font-size:18px;font-weight:900;font-family:monospace;">{pp_p}</div>
+                            <div style="color:#8896a8;font-size:9px;">pts</div>
+                            <div style="color:#8896a8;font-size:10px;margin-top:4px;">{pp_g} G</div>
+                          </div>
+                          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(135,206,235,0.2);
+                                      border-radius:4px;padding:10px;text-align:center;">
+                            <div style="color:#87ceeb;font-size:9px;text-transform:uppercase;
+                                        letter-spacing:0.08em;margin-bottom:6px;">Shorthanded</div>
+                            <div style="color:#87ceeb;font-size:18px;font-weight:900;font-family:monospace;">{sh_p}</div>
+                            <div style="color:#8896a8;font-size:9px;">pts</div>
+                            <div style="color:#8896a8;font-size:10px;margin-top:4px;">{sh_g} G</div>
+                          </div>
+                        </div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                          {_stat_block('Shots', shots, '#8896a8', 14)}
+                          {_stat_block('GWG', gwg, '#5a8f4e', 14)}
+                          {_stat_block('OTG', otg, '#f97316', 14)}
+                        </div>
+                        """)
 
         # ── GOALIE CENTER ──────────────────────────────────────────────────────
         elif mode == "Goalies":
@@ -776,6 +939,69 @@ with col_center:
                 elif tab == "Career":
                     st.page_link("pages/11_Goalies.py", label="→ Full Goalie profile with career arc",
                                  icon=":material/sports:")
+
+                elif tab == "Splits":
+                    df_gs = _goalie_splits(int(sel_id))
+                    _panel_header("Home vs Away — current season")
+                    if df_gs.empty:
+                        st.markdown("<p style='color:#8896a8;font-size:11px;'>No split data available.</p>",
+                                    unsafe_allow_html=True)
+                    else:
+                        hg = df_gs[df_gs["is_home"] == True]
+                        ag = df_gs[df_gs["is_home"] == False]
+                        hr = hg.iloc[0] if not hg.empty else None
+                        ar = ag.iloc[0] if not ag.empty else None
+
+                        def _gv(r, col, fmt=None):
+                            if r is None or pd.isna(r[col]): return "—"
+                            v = r[col]
+                            return fmt(v) if fmt else str(int(v))
+
+                        gs_stats = [
+                            ("GP",   _gv(hr,"gp"),                         _gv(ar,"gp"),                         "#8896a8"),
+                            ("Sv%",  _gv(hr,"sv_pct",lambda v:f"{v:.2f}%"),_gv(ar,"sv_pct",lambda v:f"{v:.2f}%"),"#f97316"),
+                            ("GAA",  _gv(hr,"gaa",lambda v:f"{v:.2f}"),    _gv(ar,"gaa",lambda v:f"{v:.2f}"),    "#5a8f4e"),
+                            ("GA",   _gv(hr,"ga"),                          _gv(ar,"ga"),                          "#c41e3a"),
+                            ("SA",   _gv(hr,"sa"),                          _gv(ar,"sa"),                          "#8896a8"),
+                        ]
+
+                        st.html("""
+                        <div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;margin-bottom:4px;">
+                          <div></div>
+                          <div style="text-align:center;color:#5a8f4e;font-size:9px;font-weight:700;
+                                      text-transform:uppercase;letter-spacing:0.08em;">Home</div>
+                          <div style="text-align:center;color:#87ceeb;font-size:9px;font-weight:700;
+                                      text-transform:uppercase;letter-spacing:0.08em;">Away</div>
+                        </div>
+                        """)
+
+                        rows_g = ""
+                        for label, hv, av, col in gs_stats:
+                            higher = label not in ("GAA","GA")
+                            try:
+                                hf = float(hv.replace("%","").replace("—","nan"))
+                                af = float(av.replace("%","").replace("—","nan"))
+                                if higher:
+                                    hc = col if hf >= af else "#8896a8"
+                                    ac = col if af > hf  else "#8896a8"
+                                else:
+                                    hc = col if hf <= af else "#8896a8"
+                                    ac = col if af < hf  else "#8896a8"
+                            except Exception:
+                                hc = ac = col
+                            bold = "font-weight:700;" if label in ("Sv%","GAA") else ""
+                            rows_g += (
+                                f'<div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;'
+                                f'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                f'<div style="color:#8896a8;font-size:9px;text-transform:uppercase;'
+                                f'letter-spacing:0.06em;align-self:center;">{label}</div>'
+                                f'<div style="text-align:center;color:{hc};font-family:monospace;'
+                                f'font-size:14px;{bold}">{hv}</div>'
+                                f'<div style="text-align:center;color:{ac};font-family:monospace;'
+                                f'font-size:14px;{bold}">{av}</div>'
+                                f'</div>'
+                            )
+                        st.html(f'<div>{rows_g}</div>')
 
         # ── TEAM CENTER ────────────────────────────────────────────────────────
         else:
@@ -863,6 +1089,71 @@ with col_center:
                 elif tab == "Career":
                     st.page_link("pages/9_Team_History.py", label="→ Full Team History with franchise arc",
                                  icon=":material/history:")
+
+                elif tab == "Splits":
+                    df_ts = _team_splits(sel_id)
+                    _panel_header("Home vs Away — current season")
+                    if df_ts.empty:
+                        st.markdown("<p style='color:#8896a8;font-size:11px;'>No split data available.</p>",
+                                    unsafe_allow_html=True)
+                    else:
+                        ht = df_ts[df_ts["is_home"] == True]
+                        at = df_ts[df_ts["is_home"] == False]
+                        hr = ht.iloc[0] if not ht.empty else None
+                        ar = at.iloc[0] if not at.empty else None
+
+                        def _tv(r, col, fmt=None):
+                            if r is None or pd.isna(r[col]): return "—"
+                            v = r[col]
+                            return fmt(v) if fmt else str(int(v))
+
+                        ts_stats = [
+                            ("GP",   _tv(hr,"gp"),                          _tv(ar,"gp"),                          "#8896a8"),
+                            ("W",    _tv(hr,"w"),                            _tv(ar,"w"),                            "#5a8f4e"),
+                            ("OTL",  _tv(hr,"otl"),                          _tv(ar,"otl"),                          "#87ceeb"),
+                            ("L",    _tv(hr,"l"),                            _tv(ar,"l"),                            "#c41e3a"),
+                            ("PTS",  _tv(hr,"pts"),                          _tv(ar,"pts"),                          "#5a8f4e"),
+                            ("GF/g", _tv(hr,"gf_avg",lambda v:f"{v:.2f}"),  _tv(ar,"gf_avg",lambda v:f"{v:.2f}"),  "#f97316"),
+                            ("GA/g", _tv(hr,"ga_avg",lambda v:f"{v:.2f}"),  _tv(ar,"ga_avg",lambda v:f"{v:.2f}"),  "#c41e3a"),
+                        ]
+
+                        st.html("""
+                        <div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;margin-bottom:4px;">
+                          <div></div>
+                          <div style="text-align:center;color:#5a8f4e;font-size:9px;font-weight:700;
+                                      text-transform:uppercase;letter-spacing:0.08em;">Home</div>
+                          <div style="text-align:center;color:#87ceeb;font-size:9px;font-weight:700;
+                                      text-transform:uppercase;letter-spacing:0.08em;">Away</div>
+                        </div>
+                        """)
+
+                        rows_t = ""
+                        for label, hv, av, col in ts_stats:
+                            lower_better = label in ("GA/g", "L")
+                            try:
+                                hf = float(hv.replace("—","nan"))
+                                af = float(av.replace("—","nan"))
+                                if lower_better:
+                                    hc = col if hf <= af else "#8896a8"
+                                    ac = col if af < hf  else "#8896a8"
+                                else:
+                                    hc = col if hf >= af else "#8896a8"
+                                    ac = col if af > hf  else "#8896a8"
+                            except Exception:
+                                hc = ac = col
+                            bold = "font-weight:700;" if label in ("PTS","GF/g","GA/g") else ""
+                            rows_t += (
+                                f'<div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;'
+                                f'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                f'<div style="color:#8896a8;font-size:9px;text-transform:uppercase;'
+                                f'letter-spacing:0.06em;align-self:center;">{label}</div>'
+                                f'<div style="text-align:center;color:{hc};font-family:monospace;'
+                                f'font-size:14px;{bold}">{hv}</div>'
+                                f'<div style="text-align:center;color:{ac};font-family:monospace;'
+                                f'font-size:14px;{bold}">{av}</div>'
+                                f'</div>'
+                            )
+                        st.html(f'<div>{rows_t}</div>')
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  RIGHT PANEL — quick stats card (always visible)

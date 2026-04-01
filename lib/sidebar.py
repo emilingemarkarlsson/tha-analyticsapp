@@ -1,9 +1,37 @@
 """Shared sidebar and global CSS – call render() on every page."""
 import streamlit as st
+import streamlit.components.v1 as _components
 
 
 def render() -> None:
     """Inject global CSS and render sidebar navigation."""
+    # Force sidebar open on first render of this session (localStorage may have it closed).
+    if not st.session_state.get("_sidebar_opened"):
+        st.session_state["_sidebar_opened"] = True
+        _components.html("""
+        <script>
+        (function() {
+            function expand() {
+                try {
+                    var p = window.parent;
+                    // Clear any stored collapsed state
+                    Object.keys(p.localStorage).forEach(function(k) {
+                        if (k.indexOf('sidebar') !== -1 || k.indexOf('Sidebar') !== -1) {
+                            p.localStorage.removeItem(k);
+                        }
+                    });
+                    // Click expand button if sidebar is collapsed
+                    var btn = p.document.querySelector('[data-testid="collapsedControl"] button');
+                    if (btn) { btn.click(); }
+                } catch(e) {}
+            }
+            if (document.readyState === 'complete') { expand(); }
+            else { window.addEventListener('load', expand); }
+            setTimeout(expand, 300);
+        })();
+        </script>
+        """, height=0)
+
     st.markdown(
         """
         <style>
@@ -54,11 +82,15 @@ def render() -> None:
 
         /* Make the sidebar expand/collapse arrow clearly visible */
         [data-testid="collapsedControl"] {
-            background: #0a0a0a !important;
-            border-right: 1px solid rgba(255,255,255,0.08) !important;
+            background: rgba(90,143,78,0.25) !important;
+            border-right: 2px solid #5a8f4e !important;
+            width: 28px !important;
+            min-width: 28px !important;
         }
         [data-testid="collapsedControl"] svg {
             fill: #5a8f4e !important;
+            width: 20px !important;
+            height: 20px !important;
         }
 
         /* ── Mobile responsiveness ──────────────────────── */

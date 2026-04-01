@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_COOKIE_KEY = "tha_auth"
+
 
 @st.cache_resource(show_spinner=False)
 def _get_client() -> Client:
@@ -14,6 +16,33 @@ def _get_client() -> Client:
     if not url or not key:
         raise RuntimeError("SUPABASE_URL or SUPABASE_ANON_KEY not set")
     return create_client(url, key)
+
+
+def _cc():
+    """Return a CookieController, cached in session_state to avoid re-renders."""
+    if "_tha_cc" not in st.session_state:
+        from streamlit_cookies_controller import CookieController
+        st.session_state["_tha_cc"] = CookieController()
+    return st.session_state["_tha_cc"]
+
+
+def restore_from_cookie() -> None:
+    """Try to restore Supabase session from browser cookie. Call before require_login()."""
+    if st.session_state.get("sb_user"):
+        return
+    try:
+        token_data = _cc().get(_COOKIE_KEY)
+        if token_data and "|||" in str(token_data):
+            access_token, refresh_token = str(token_data).split("|||", 1)
+            res = _get_client().auth.set_session(access_token, refresh_token)
+            if res.user:
+                st.session_state["sb_user"] = {
+                    "id": res.user.id,
+                    "email": res.user.email,
+                    "created_at": str(res.user.created_at),
+                }
+    except Exception:
+        pass
 
 
 def get_user() -> dict | None:
@@ -40,6 +69,12 @@ def sign_in(email: str, password: str) -> tuple[bool, str]:
             "created_at": str(res.user.created_at),
         }
         st.session_state["sb_session"] = res.session.access_token
+        try:
+            _cc().set(_COOKIE_KEY,
+                      f"{res.session.access_token}|||{res.session.refresh_token}",
+                      max_age=60 * 60 * 24 * 30)  # 30 days
+        except Exception:
+            pass
         return True, ""
     except Exception as e:
         msg = str(e)
@@ -69,5 +104,10 @@ def sign_out() -> None:
         _get_client().auth.sign_out()
     except Exception:
         pass
+    try:
+        _cc().remove(_COOKIE_KEY)
+    except Exception:
+        pass
     st.session_state.pop("sb_user", None)
     st.session_state.pop("sb_session", None)
+    st.session_state.pop("_tha_cc", None)

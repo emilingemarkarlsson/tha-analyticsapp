@@ -18,65 +18,6 @@ def _ss(key, default):
         st.session_state[key] = default
     return st.session_state[key]
 
-# ── Sidebar collapse ────────────────────────────────────────────────────────────
-_ss("sb_open", True)
-if not st.session_state.sb_open:
-    st.markdown("""
-    <style>
-    /* Hide real sidebar and Streamlit's collapse arrow */
-    section[data-testid="stSidebar"],
-    [data-testid="collapsedControl"] { display:none !important; }
-    /* Push main content past the icon bar */
-    [data-testid="block-container"] {
-        padding-left: calc(52px + 0.4rem) !important;
-    }
-    </style>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
-    <div id="tha-nav">
-      <div class="tha-logo">THA</div>
-      <a href="/"               title="Intelligence Feed"><span class="ms">trending_up</span></a>
-      <a href="/Terminal"       title="Terminal"         ><span class="ms">terminal</span></a>
-      <a href="/Standings"      title="Standings"        ><span class="ms">leaderboard</span></a>
-      <a href="/Players"        title="Players"          ><span class="ms">person</span></a>
-      <a href="/Teams"          title="Teams"            ><span class="ms">shield</span></a>
-      <a href="/Player_History" title="Player History"   ><span class="ms">show_chart</span></a>
-      <a href="/Team_History"   title="Team History"     ><span class="ms">history</span></a>
-      <a href="/Goalies"        title="Goalies"          ><span class="ms">sports</span></a>
-      <a href="/Playoffs"       title="Playoffs"         ><span class="ms">emoji_events</span></a>
-      <div style="height:6px;width:1px;margin:4px 0;border-top:1px solid rgba(255,255,255,0.08);width:32px;"></div>
-      <a href="/Screener"  title="Screener"      ><span class="ms">filter_list</span></a>
-      <a href="/Watchlist" title="My Hockey Room"><span class="ms">folder_special</span></a>
-      <a href="/Chat"      title="AI Chat"       ><span class="ms">chat</span></a>
-      <a href="/Account"   title="My Account"    ><span class="ms">manage_accounts</span></a>
-    </div>
-    <style>
-    #tha-nav {
-        position: fixed; left: 0; top: 0; height: 100vh; width: 52px;
-        background: #050505; border-right: 1px solid rgba(255,255,255,0.08);
-        z-index: 99999; display: flex; flex-direction: column;
-        align-items: center; padding-top: 10px; overflow-y: auto; overflow-x: hidden;
-        scrollbar-width: none;
-    }
-    #tha-nav::-webkit-scrollbar { display: none; }
-    .tha-logo {
-        width: 30px; height: 30px; background: #5a8f4e; border-radius: 5px;
-        display: flex; align-items: center; justify-content: center;
-        font-family: Arial, sans-serif; font-size: 9px; font-weight: 900;
-        color: #fff; margin-bottom: 10px; flex-shrink: 0; cursor: default;
-    }
-    #tha-nav a {
-        width: 36px; height: 36px; border-radius: 6px;
-        display: flex; align-items: center; justify-content: center;
-        color: #8896a8; text-decoration: none; margin: 1px 0;
-        flex-shrink: 0; transition: background 0.15s, color 0.15s;
-    }
-    #tha-nav a:hover { background: rgba(90,143,78,0.15); color: #5a8f4e; }
-    .ms {
-        font-family: 'Material Symbols Rounded'; font-size: 20px;
-        font-weight: 300; line-height: 1; font-style: normal;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
 _render_sidebar()
 require_login()
@@ -472,15 +413,7 @@ def _style_sigma(val):
 # ══════════════════════════════════════════════════════════════════════════════
 #  TOP BAR
 # ══════════════════════════════════════════════════════════════════════════════
-top_sb, top_mode, top_tab, top_search = st.columns([0.4, 2.2, 3, 2.5])
-
-# Sidebar toggle
-with top_sb:
-    icon = "◀" if st.session_state.sb_open else "▶"
-    help_txt = "Collapse to icons" if st.session_state.sb_open else "Expand sidebar"
-    if st.button(icon, key="sb_toggle", help=help_txt):
-        st.session_state.sb_open = not st.session_state.sb_open
-        st.rerun()
+top_mode, top_tab, top_search = st.columns([2.2, 3, 2.5])
 
 # Mode buttons
 with top_mode:

@@ -19,30 +19,9 @@ def _get_client() -> Client:
 
 
 def _cc():
-    """Return a CookieController, cached in session_state to avoid re-renders."""
-    if "_tha_cc" not in st.session_state:
-        from streamlit_cookies_controller import CookieController
-        st.session_state["_tha_cc"] = CookieController()
-    return st.session_state["_tha_cc"]
-
-
-def restore_from_cookie() -> None:
-    """Try to restore Supabase session from browser cookie. Call before require_login()."""
-    if st.session_state.get("sb_user"):
-        return
-    try:
-        token_data = _cc().get(_COOKIE_KEY)
-        if token_data and "|||" in str(token_data):
-            access_token, refresh_token = str(token_data).split("|||", 1)
-            res = _get_client().auth.set_session(access_token, refresh_token)
-            if res.user:
-                st.session_state["sb_user"] = {
-                    "id": res.user.id,
-                    "email": res.user.email,
-                    "created_at": str(res.user.created_at),
-                }
-    except Exception:
-        pass
+    """Return a fresh CookieController each render (component must re-mount per page load)."""
+    from streamlit_cookies_controller import CookieController
+    return CookieController(key="tha_cc")
 
 
 def get_user() -> dict | None:
@@ -51,11 +30,45 @@ def get_user() -> dict | None:
 
 
 def require_login() -> dict:
-    """Redirect to login page if not authenticated. Returns user dict if ok."""
-    user = get_user()
-    if not user:
-        st.switch_page("pages/0_Login.py")
-    return user
+    """Restore session from cookie if needed, redirect to login if unauthenticated.
+
+    Uses a two-pass pattern: on first render the CookieController component loads
+    and st.stop() lets Streamlit wait for the JS round-trip. On the second render
+    the cookie value is available.
+    """
+    if get_user():
+        return get_user()
+
+    try:
+        cc = _cc()
+        token_data = cc.get(_COOKIE_KEY)
+
+        if token_data is None:
+            # Component hasn't responded yet (first render after session reset).
+            # st.stop() holds this render; Streamlit reruns automatically when
+            # the JS component sends back the cookie value.
+            if not st.session_state.get("_cc_waited"):
+                st.session_state["_cc_waited"] = True
+                st.stop()
+            # Second render: still None means genuinely no cookie → fall through
+        else:
+            st.session_state["_cc_waited"] = False
+            if "|||" in str(token_data):
+                access_token, refresh_token = str(token_data).split("|||", 1)
+                res = _get_client().auth.set_session(access_token, refresh_token)
+                if res.user:
+                    st.session_state["sb_user"] = {
+                        "id": res.user.id,
+                        "email": res.user.email,
+                        "created_at": str(res.user.created_at),
+                    }
+                    st.rerun()  # Rerender with auth set
+    except Exception:
+        pass
+
+    st.session_state["_cc_waited"] = False
+    st.switch_page("pages/0_Login.py")
+    return None
 
 
 def sign_in(email: str, password: str) -> tuple[bool, str]:
@@ -110,4 +123,4 @@ def sign_out() -> None:
         pass
     st.session_state.pop("sb_user", None)
     st.session_state.pop("sb_session", None)
-    st.session_state.pop("_tha_cc", None)
+    st.session_state.pop("_cc_waited", None)

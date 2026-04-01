@@ -4,10 +4,6 @@ import streamlit as st
 
 def render() -> None:
     """Inject global CSS and render sidebar navigation."""
-    # Restore Supabase session from cookie on every page load (survives browser refresh)
-    from lib.auth import restore_from_cookie
-    restore_from_cookie()
-
     st.markdown(
         """
         <style>

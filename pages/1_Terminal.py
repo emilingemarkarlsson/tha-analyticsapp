@@ -213,18 +213,30 @@ def _goalie_games(pid) -> pd.DataFrame:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _team_games(abbr) -> pd.DataFrame:
+    pfx = _season_pfx()
     return query_fresh(f"""
-        SELECT game_date AS date, opponent_abbr AS opp,
-               CASE WHEN is_home THEN 'vs' ELSE '@' END AS ha,
-               TRY_CAST(goals_for AS INTEGER)     AS GF,
-               TRY_CAST(goals_against AS INTEGER) AS GA,
-               CASE WHEN TRY_CAST(team_points AS INTEGER)=2 THEN 'W'
-                    WHEN TRY_CAST(team_points AS INTEGER)=1 THEN 'OTL'
-                    ELSE 'L' END AS result
-        FROM team_game_stats
-        WHERE team_abbr='{abbr}' AND game_type='2'
-          AND season=(SELECT MAX(season) FROM games WHERE game_type=2)
-        ORDER BY game_date DESC LIMIT 12
+        SELECT a.game_date AS date,
+               b.team_abbr AS opp,
+               CASE WHEN a.is_home THEN 'vs' ELSE '@' END AS ha,
+               CAST(a.gf AS INTEGER) AS GF,
+               CAST(b.gf AS INTEGER) AS GA,
+               CASE WHEN a.gf > b.gf THEN 'W'
+                    WHEN a.gf < b.gf THEN 'L'
+                    ELSE 'OTL' END AS result
+        FROM (
+            SELECT game_id, game_date, team_abbr, is_home, SUM(goals) AS gf
+            FROM player_game_stats
+            WHERE CAST(game_id AS VARCHAR) LIKE '{pfx}' AND position != 'G'
+            GROUP BY game_id, game_date, team_abbr, is_home
+        ) a
+        JOIN (
+            SELECT game_id, team_abbr, SUM(goals) AS gf
+            FROM player_game_stats
+            WHERE CAST(game_id AS VARCHAR) LIKE '{pfx}' AND position != 'G'
+            GROUP BY game_id, team_abbr
+        ) b ON b.game_id = a.game_id AND b.team_abbr != a.team_abbr
+        WHERE a.team_abbr = '{abbr}'
+        ORDER BY a.game_date DESC LIMIT 12
     """)
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -263,18 +275,32 @@ def _goalie_splits(pid) -> pd.DataFrame:
 
 @st.cache_data(ttl=900, show_spinner=False)
 def _team_splits(abbr) -> pd.DataFrame:
+    pfx = _season_pfx()
     return query_fresh(f"""
-        SELECT is_home, COUNT(*) AS gp,
-               SUM(CASE WHEN TRY_CAST(team_points AS INTEGER)=2 THEN 1 ELSE 0 END) AS w,
-               SUM(CASE WHEN TRY_CAST(team_points AS INTEGER)=1 THEN 1 ELSE 0 END) AS otl,
-               SUM(CASE WHEN TRY_CAST(team_points AS INTEGER)=0 THEN 1 ELSE 0 END) AS l,
-               ROUND(AVG(TRY_CAST(goals_for  AS DOUBLE)),2) AS gf_avg,
-               ROUND(AVG(TRY_CAST(goals_against AS DOUBLE)),2) AS ga_avg,
-               SUM(TRY_CAST(team_points AS INTEGER)) AS pts
-        FROM team_game_stats
-        WHERE team_abbr='{abbr}' AND game_type='2'
-          AND season=(SELECT MAX(season) FROM games WHERE game_type=2)
-        GROUP BY is_home
+        SELECT a.is_home,
+               COUNT(*) AS gp,
+               SUM(CASE WHEN a.gf > b.gf THEN 1 ELSE 0 END) AS w,
+               SUM(CASE WHEN a.gf = b.gf THEN 1 ELSE 0 END) AS otl,
+               SUM(CASE WHEN a.gf < b.gf THEN 1 ELSE 0 END) AS l,
+               ROUND(AVG(a.gf), 2) AS gf_avg,
+               ROUND(AVG(b.gf), 2) AS ga_avg,
+               SUM(CASE WHEN a.gf > b.gf THEN 2
+                        WHEN a.gf = b.gf THEN 1 ELSE 0 END) AS pts
+        FROM (
+            SELECT game_id, is_home, SUM(goals) AS gf
+            FROM player_game_stats
+            WHERE CAST(game_id AS VARCHAR) LIKE '{pfx}' AND position != 'G'
+              AND team_abbr = '{abbr}'
+            GROUP BY game_id, is_home
+        ) a
+        JOIN (
+            SELECT game_id, SUM(goals) AS gf
+            FROM player_game_stats
+            WHERE CAST(game_id AS VARCHAR) LIKE '{pfx}' AND position != 'G'
+              AND team_abbr != '{abbr}'
+            GROUP BY game_id
+        ) b ON b.game_id = a.game_id
+        GROUP BY a.is_home
     """)
 
 @st.cache_data(ttl=900, show_spinner=False)

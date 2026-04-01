@@ -22,8 +22,37 @@ def _ss(key, default):
 _ss("sb_open", True)
 if not st.session_state.sb_open:
     st.markdown("""<style>
-    section[data-testid="stSidebar"],
-    [data-testid="collapsedControl"] { display:none !important; }
+    /* Narrow the sidebar to icon-only strip */
+    section[data-testid="stSidebar"] {
+        width: 58px !important;
+        min-width: 58px !important;
+    }
+    section[data-testid="stSidebar"] > div:first-child {
+        width: 58px !important;
+        min-width: 58px !important;
+        padding: 1rem 0 !important;
+    }
+    /* Hide text labels in page links, keep icons */
+    section[data-testid="stSidebar"] [data-testid="stPageLink"] p,
+    section[data-testid="stSidebar"] [data-testid="stPageLink"] span:not([data-testid]) {
+        display: none !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stPageLink"] {
+        padding: 6px 0 !important;
+        justify-content: center !important;
+        display: flex !important;
+    }
+    section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+        justify-content: center !important;
+        padding: 6px 8px !important;
+        min-width: 0 !important;
+    }
+    /* Hide logo, section labels, user chip, status widget */
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        display: none !important;
+    }
+    /* Keep Streamlit's built-in collapse arrow visible */
+    [data-testid="collapsedControl"] { display: flex !important; }
     </style>""", unsafe_allow_html=True)
 
 _render_sidebar()
@@ -424,8 +453,9 @@ top_sb, top_mode, top_tab, top_search = st.columns([0.4, 2.2, 3, 2.5])
 
 # Sidebar toggle
 with top_sb:
-    icon = "◀" if st.session_state.sb_open else "☰"
-    if st.button(icon, key="sb_toggle", help="Toggle navigation sidebar"):
+    icon = "◀" if st.session_state.sb_open else "▶"
+    help_txt = "Collapse to icons" if st.session_state.sb_open else "Expand sidebar"
+    if st.button(icon, key="sb_toggle", help=help_txt):
         st.session_state.sb_open = not st.session_state.sb_open
         st.rerun()
 

@@ -77,6 +77,13 @@ WEST = DIV_TEAMS["CEN"] + DIV_TEAMS["PAC"]
 # ══════════════════════════════════════════════════════════════════════════════
 #  DATA LOADERS
 # ══════════════════════════════════════════════════════════════════════════════
+@st.cache_data(ttl=3600, show_spinner=False)
+def _season_pfx() -> str:
+    """Returns game_id LIKE prefix for current regular season, e.g. '202502%'."""
+    df = query("SELECT MAX(season) FROM standings")
+    season = int(df.iloc[0, 0])   # e.g. 20252026
+    year   = season // 10000       # 2025
+    return f"{year}02%"            # '202502%'
 @st.cache_data(ttl=900, show_spinner=False)
 def _skater_list() -> pd.DataFrame:
     return query("""
@@ -154,30 +161,31 @@ def _player_bio(pid) -> pd.Series | None:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _player_games(pid) -> pd.DataFrame:
+    pfx = _season_pfx()
     return query_fresh(f"""
-        SELECT g.game_date AS date,
+        SELECT pgs.game_date AS date,
                opp.team_abbr AS opp,
                CASE WHEN pgs.is_home THEN 'vs' ELSE '@' END AS ha,
                pgs.goals AS G, pgs.assists AS A, pgs.points AS PTS,
                ROUND(pgs.toi_seconds/60.0,1) AS TOI
         FROM player_game_stats pgs
-        JOIN games g ON pgs.game_id=g.game_id
-        LEFT JOIN (SELECT game_id, team_abbr FROM team_game_stats WHERE game_type='2') opp
+        LEFT JOIN (SELECT game_id, team_abbr FROM team_game_stats
+                   WHERE CAST(game_id AS VARCHAR) LIKE '{pfx}') opp
                ON opp.game_id=pgs.game_id AND opp.team_abbr != pgs.team_abbr
-        WHERE pgs.player_id={pid} AND g.game_type=2
-          AND g.season=(SELECT MAX(season) FROM games WHERE game_type=2)
-        ORDER BY g.game_date DESC LIMIT 12
+        WHERE pgs.player_id={pid}
+          AND CAST(pgs.game_id AS VARCHAR) LIKE '{pfx}'
+        ORDER BY pgs.game_date DESC LIMIT 12
     """)
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _player_form_series(pid) -> pd.DataFrame:
+    pfx = _season_pfx()
     return query_fresh(f"""
-        SELECT g.game_date AS date, pgs.points AS pts
-        FROM player_game_stats pgs
-        JOIN games g ON pgs.game_id=g.game_id
-        WHERE pgs.player_id={pid} AND g.game_type=2
-          AND g.season=(SELECT MAX(season) FROM games WHERE game_type=2)
-        ORDER BY g.game_date
+        SELECT game_date AS date, points AS pts
+        FROM player_game_stats
+        WHERE player_id={pid}
+          AND CAST(game_id AS VARCHAR) LIKE '{pfx}'
+        ORDER BY game_date
     """)
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -221,16 +229,16 @@ def _team_games(abbr) -> pd.DataFrame:
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _player_splits(pid) -> dict:
+    pfx = _season_pfx()
     ha = query_fresh(f"""
-        SELECT pgs.is_home,
-               COUNT(*) AS gp, SUM(pgs.goals) AS g, SUM(pgs.assists) AS a,
-               SUM(pgs.points) AS pts, ROUND(AVG(pgs.points),2) AS avg_pts,
-               ROUND(AVG(pgs.toi_seconds/60.0),1) AS avg_toi
-        FROM player_game_stats pgs
-        JOIN games g ON pgs.game_id=g.game_id
-        WHERE pgs.player_id={pid} AND pgs.is_home IS NOT NULL
-          AND g.game_type=2 AND g.season=(SELECT MAX(season) FROM games WHERE game_type=2)
-        GROUP BY pgs.is_home
+        SELECT is_home,
+               COUNT(*) AS gp, SUM(goals) AS g, SUM(assists) AS a,
+               SUM(points) AS pts, ROUND(AVG(points),2) AS avg_pts,
+               ROUND(AVG(toi_seconds/60.0),1) AS avg_toi
+        FROM player_game_stats
+        WHERE player_id={pid} AND is_home IS NOT NULL
+          AND CAST(game_id AS VARCHAR) LIKE '{pfx}'
+        GROUP BY is_home
     """)
     sit = query_fresh(f"""
         SELECT evGoals,evPoints,ppGoals,ppPoints,shGoals,shPoints,

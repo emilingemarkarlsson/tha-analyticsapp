@@ -36,7 +36,8 @@ def get_data_date() -> str:
     """
     try:
         row = get_con().execute(
-            "SELECT MAX(game_date)::VARCHAR AS d FROM games WHERE game_type = 2"
+            "SELECT MAX(game_date)::VARCHAR AS d FROM player_game_stats"
+            " WHERE CAST((game_id / 10000) % 100 AS INTEGER) = 2"
         ).fetchone()
         if row and row[0]:
             return str(row[0])[:10]
@@ -48,24 +49,25 @@ def get_data_date() -> str:
 @st.cache_data(ttl=3600, show_spinner=False)
 def player_career(player_id: str) -> pd.DataFrame:
     """Season-by-season career stats for one player. Cached 1 h.
-    Heavy query (joins player_game_stats × games across 16 seasons).
+    Derives season and game_type from game_id (avoids broken games-table join).
+    game_id format: SSSSTTGGGG — season_year (4) + game_type (2) + game_num (4)
     """
     return get_con().execute(f"""
-        SELECT g.season,
-               COUNT(DISTINCT pgs.game_id)        AS gp,
-               SUM(pgs.goals)                     AS goals,
-               SUM(pgs.assists)                   AS assists,
-               SUM(pgs.goals + pgs.assists)       AS points,
-               SUM(pgs.toi_seconds) / 3600.0      AS toi_hours,
-               AVG(pgs.toi_seconds) / 60.0        AS avg_toi_min
-        FROM player_game_stats pgs
-        JOIN games g ON pgs.game_id = g.game_id
-        WHERE TRY_CAST(pgs.player_id AS VARCHAR) = '{player_id}'
-          AND g.game_type = 2
-          AND pgs.toi_seconds > 0
-        GROUP BY g.season
-        HAVING COUNT(DISTINCT pgs.game_id) >= 5
-        ORDER BY g.season
+        SELECT CAST(game_id / 1000000 AS INTEGER) * 10000
+                 + CAST(game_id / 1000000 AS INTEGER) + 1   AS season,
+               COUNT(DISTINCT game_id)                      AS gp,
+               SUM(goals)                                   AS goals,
+               SUM(assists)                                 AS assists,
+               SUM(points)                                  AS points,
+               SUM(toi_seconds) / 3600.0                   AS toi_hours,
+               AVG(toi_seconds) / 60.0                     AS avg_toi_min
+        FROM player_game_stats
+        WHERE TRY_CAST(player_id AS VARCHAR) = '{player_id}'
+          AND CAST((game_id / 10000) % 100 AS INTEGER) = 2
+          AND toi_seconds > 0
+        GROUP BY 1
+        HAVING COUNT(DISTINCT game_id) >= 5
+        ORDER BY 1
     """).df()
 
 

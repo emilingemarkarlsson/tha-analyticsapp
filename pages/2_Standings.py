@@ -9,7 +9,7 @@ from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 from lib.components import page_header, data_source_footer
 
-st.set_page_config(page_title="Standings – THA Analytics", layout="wide")
+st.set_page_config(page_title="Standings – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 from lib.auth import sign_in, sign_up, get_user, _get_client
 
-st.set_page_config(page_title="Login – THA Analytics", layout="wide")
+st.set_page_config(page_title="Login – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 
 if get_user():
     st.switch_page("app.py")

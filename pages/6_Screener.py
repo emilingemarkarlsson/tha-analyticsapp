@@ -10,7 +10,7 @@ from lib.auth import require_login
 from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
 from lib import userdb
 
-st.set_page_config(page_title="Screener – THA Analytics", layout="wide")
+st.set_page_config(page_title="Screener – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

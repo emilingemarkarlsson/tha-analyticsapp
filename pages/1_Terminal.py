@@ -10,7 +10,7 @@ from lib.db import query, query_fresh, get_data_date
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 
-st.set_page_config(page_title="Terminal – THA Analytics", layout="wide")
+st.set_page_config(page_title="Terminal – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 
 # ── Session state helper ───────────────────────────────────────────────────────
 def _ss(key, default):

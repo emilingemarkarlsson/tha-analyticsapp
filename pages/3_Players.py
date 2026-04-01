@@ -9,7 +9,7 @@ from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
 
-st.set_page_config(page_title="Players – THA Analytics", layout="wide")
+st.set_page_config(page_title="Players – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

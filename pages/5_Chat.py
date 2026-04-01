@@ -9,7 +9,7 @@ from lib.litellm_client import text_to_sql, fix_sql, summarise
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 
-st.set_page_config(page_title="AI Chat – THA Analytics", layout="wide")
+st.set_page_config(page_title="AI Chat – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

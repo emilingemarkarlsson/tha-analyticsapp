@@ -52,6 +52,15 @@ def render() -> None:
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
 
+        /* Make the sidebar expand/collapse arrow clearly visible */
+        [data-testid="collapsedControl"] {
+            background: #0a0a0a !important;
+            border-right: 1px solid rgba(255,255,255,0.08) !important;
+        }
+        [data-testid="collapsedControl"] svg {
+            fill: #5a8f4e !important;
+        }
+
         /* ── Mobile responsiveness ──────────────────────── */
         @media (max-width: 768px) {
             /* Stack all column pairs on mobile */

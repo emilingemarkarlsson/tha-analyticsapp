@@ -14,7 +14,7 @@ from lib.components import (
     stat_card_row, tier_badge_html, methodology_note,
 )
 
-st.set_page_config(page_title="Team History – THA Analytics", layout="wide")
+st.set_page_config(page_title="Team History – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

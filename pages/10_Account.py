@@ -7,7 +7,7 @@ from lib.auth import require_login, sign_out, _get_client
 from lib.sidebar import render as _render_sidebar
 from lib.components import page_header, data_source_footer
 
-st.set_page_config(page_title="Account – THA Analytics", layout="wide")
+st.set_page_config(page_title="Account – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 user = require_login()
 

@@ -218,24 +218,26 @@ def _team_games(abbr) -> pd.DataFrame:
 def _player_splits(pid) -> dict:
     """Home/Away + EV/PP/SH splits for a skater."""
     ha = query_fresh(f"""
-        SELECT is_home,
-               COUNT(*)                           AS gp,
-               SUM(goals)                         AS g,
-               SUM(assists)                       AS a,
-               SUM(goals+assists)                 AS pts,
-               ROUND(AVG(goals+assists), 2)       AS avg_pts,
-               ROUND(AVG(toi_seconds/60.0), 1)    AS avg_toi
-        FROM player_game_stats
-        WHERE player_id={pid} AND is_home IS NOT NULL
-          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
-        GROUP BY is_home
+        SELECT pgs.is_home,
+               COUNT(*)                              AS gp,
+               SUM(pgs.goals)                        AS g,
+               SUM(pgs.assists)                      AS a,
+               SUM(pgs.points)                       AS pts,
+               ROUND(AVG(pgs.points), 2)             AS avg_pts,
+               ROUND(AVG(pgs.toi_seconds/60.0), 1)   AS avg_toi
+        FROM player_game_stats pgs
+        JOIN games g ON pgs.game_id = g.game_id
+        WHERE pgs.player_id={pid} AND pgs.is_home IS NOT NULL
+          AND g.game_type = 2
+          AND g.season = (SELECT MAX(season) FROM games WHERE game_type = 2)
+        GROUP BY pgs.is_home
     """)
     sit = query_fresh(f"""
         SELECT evGoals, evPoints, ppGoals, ppPoints, shGoals, shPoints,
-               timeOnIcePerGame, shots, gameWinningGoals, otGoals
+               shots, gameWinningGoals, otGoals
         FROM skater_stats
         WHERE playerId={pid}
-          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
+          AND season = (SELECT MAX(season) FROM games WHERE game_type = 2)
         LIMIT 1
     """)
     return {"ha": ha, "sit": sit}
@@ -245,15 +247,15 @@ def _goalie_splits(pid) -> pd.DataFrame:
     """Home/Away splits for a goalie."""
     return query_fresh(f"""
         SELECT is_home,
-               COUNT(*)                                         AS gp,
-               SUM(saves)                                       AS sv,
-               SUM(shots_against)                               AS sa,
-               SUM(goals_against)                               AS ga,
-               ROUND(SUM(saves)*100.0/NULLIF(SUM(shots_against),0), 2) AS sv_pct,
+               COUNT(*)                                                        AS gp,
+               SUM(saves)                                                      AS sv,
+               SUM(shots_against)                                              AS sa,
+               SUM(goals_against)                                              AS ga,
+               ROUND(SUM(saves)*100.0/NULLIF(SUM(shots_against),0), 2)        AS sv_pct,
                ROUND(SUM(goals_against)*3600.0/NULLIF(SUM(toi_seconds),0), 2) AS gaa
         FROM goalie_rolling_stats
         WHERE player_id={pid} AND is_home IS NOT NULL
-          AND season=(SELECT MAX(season) FROM games WHERE game_type='2')
+          AND season = (SELECT MAX(season) FROM games WHERE game_type = 2)
         GROUP BY is_home
     """)
 

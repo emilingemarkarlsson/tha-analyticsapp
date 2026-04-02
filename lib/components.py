@@ -85,7 +85,7 @@ def tier_badge_html(z: float, show_z: bool = True) -> str:
 
 def zscore_legend(with_title: bool = True) -> None:
     """Standard z-score colour legend used on Players, Screener, Feed."""
-    title = "<p style='font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#8896a8;margin-bottom:6px;'>Form legend (σ)</p>" if with_title else ""
+    title = "<p style='font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#8896a8;margin-bottom:6px;'>Momentum legend</p>" if with_title else ""
     st.markdown(
         f"{title}"
         f"<div style='display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:{MUTED};margin-bottom:12px;'>"

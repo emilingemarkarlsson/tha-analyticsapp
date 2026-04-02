@@ -14,7 +14,7 @@ st.set_page_config(page_title="Goalies – THA Analytics", layout="wide", initia
 _render_sidebar()
 require_login()
 
-page_header("Goalies", "Current season form · Sv% z-score vs 20-game baseline", data_date=get_data_date())
+page_header("Goalies", "Current season · Save% momentum vs 20-game baseline", data_date=get_data_date())
 zscore_legend()
 
 # ── Top trending goalies ───────────────────────────────────────────────────────

@@ -45,6 +45,29 @@ FILTER_GROUPS: dict[str, list[str]] = {
 from lib.components import page_header
 page_header("Intelligence Feed", "AI-generated insights · updated daily", data_date=get_data_date())
 
+# ── First-visit welcome card ───────────────────────────────────────────────
+if not st.session_state.get("welcome_dismissed"):
+    col_w, col_x = st.columns([10, 1])
+    with col_w:
+        st.markdown(
+            """<div style="background:rgba(90,143,78,0.08);border:1px solid rgba(90,143,78,0.25);
+                           border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+              <span style="color:#5a8f4e;font-size:10px;font-weight:700;text-transform:uppercase;
+                           letter-spacing:0.08em;">Welcome to THA Analytics</span>
+              <p style="color:#8896a8;font-size:12px;line-height:1.6;margin:6px 0 0;">
+                This feed shows AI-generated insights for NHL players and teams.
+                Use <strong style="color:#fff;">Player Finder</strong> to screen players,
+                <strong style="color:#fff;">Deep Dive</strong> for detailed stats,
+                or <strong style="color:#fff;">Ask AI</strong> to query the data in plain English.
+              </p>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    with col_x:
+        if st.button("✕", key="dismiss_welcome", help="Dismiss"):
+            st.session_state["welcome_dismissed"] = True
+            st.rerun()
+
 try:
     df_insights = query("""
         SELECT insight_type, entity_name, team_abbr, zscore, severity,
@@ -144,6 +167,13 @@ if db_ok:
         if filtered.empty:
             st.info("No insights for this filter.")
         else:
+            _INSIGHT_LINKS = {
+                "hot_streak": "/3_Players", "breakout": "/3_Players",
+                "cold_spell": "/3_Players", "slump": "/3_Players",
+                "goalie_hot": "/11_Goalies", "goalie_cold": "/11_Goalies",
+                "team_surge": "/4_Teams", "team_collapse": "/4_Teams",
+                "possession_edge": "/4_Teams",
+            }
             for _, row in filtered.iterrows():
                 color = INSIGHT_COLORS.get(row["insight_type"], "#5a8f4e")
                 label = INSIGHT_LABELS.get(row["insight_type"], row["insight_type"])
@@ -160,12 +190,17 @@ if db_ok:
                 game_date = str(row["game_date"])[:10]
                 headline = str(row["headline"]) if row["headline"] else ""
                 body = str(row["body"]) if row["body"] else ""
+                link = _INSIGHT_LINKS.get(row["insight_type"], "/3_Players")
                 st.markdown(
-                    f"""<div style="border-left:2px solid {color};background:rgba(255,255,255,0.03);
+                    f"""<a href="{link}" target="_self" style="text-decoration:none;display:block;">
+                    <div style="border-left:2px solid {color};background:rgba(255,255,255,0.03);
                                 border-radius:0 5px 5px 0;padding:12px 16px;margin-bottom:8px;
                                 border-top:1px solid rgba(255,255,255,0.06);
                                 border-right:1px solid rgba(255,255,255,0.06);
-                                border-bottom:1px solid rgba(255,255,255,0.06);">
+                                border-bottom:1px solid rgba(255,255,255,0.06);
+                                cursor:pointer;transition:background 0.15s;"
+                         onmouseover="this.style.background='rgba(255,255,255,0.06)'"
+                         onmouseout="this.style.background='rgba(255,255,255,0.03)'">
                       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                         <div style="display:flex;align-items:center;gap:8px;">
                           <span style="color:#fff;font-weight:700;font-size:13px;">{row['entity_name']}</span>
@@ -185,7 +220,7 @@ if db_ok:
                         <span style="color:rgba(255,255,255,0.2);font-size:11px;font-family:monospace;">{game_date}</span>
                         <span>{dots}</span>
                       </div>
-                    </div>""",
+                    </div></a>""",
                     unsafe_allow_html=True,
                 )
 
@@ -251,10 +286,10 @@ if db_ok:
             """<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
                           border-radius:5px;padding:12px 14px;">
               <p style="color:#5a8f4e;font-size:10px;font-weight:600;text-transform:uppercase;
-                         letter-spacing:0.08em;margin-bottom:6px;">Methodology</p>
+                         letter-spacing:0.08em;margin-bottom:6px;">How it works</p>
               <p style="color:#8896a8;font-size:11px;line-height:1.6;margin:0;">
-                Z-scores compare a player's last 5 games against their 20-game rolling baseline.
-                Anomalies beyond ±0.8σ trigger an insight.
+                Each player's last 5 games are compared to their 20-game baseline.
+                A big gap = high Momentum score. Updated daily.
               </p>
             </div>""",
             unsafe_allow_html=True,

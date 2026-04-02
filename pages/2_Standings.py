@@ -13,7 +13,7 @@ st.set_page_config(page_title="Standings – THA Analytics", layout="wide", init
 _render_sidebar()
 require_login()
 
-page_header("Standings", "Current season · Regular season", data_date=get_data_date())
+page_header("Standings", "Current season · DIV = playoff spot, WC = wild card", data_date=get_data_date())
 
 DIVISION_ORDER = ["A", "M", "C", "P"]
 DIVISION_NAMES = {"A": "Atlantic", "M": "Metropolitan", "C": "Central", "P": "Pacific"}

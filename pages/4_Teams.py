@@ -19,11 +19,45 @@ ALL_TEAMS = [
     "DET","EDM","FLA","LAK","MIN","MTL","NSH","NJD","NYI","NYR",
     "OTT","PHI","PIT","SEA","SJS","STL","TBL","TOR","UTA","VAN","VGK","WSH","WPG",
 ]
+TEAM_NAMES = {
+    "ANA":"Anaheim Ducks","ARI":"Arizona Coyotes","BOS":"Boston Bruins",
+    "BUF":"Buffalo Sabres","CAR":"Carolina Hurricanes","CGY":"Calgary Flames",
+    "CHI":"Chicago Blackhawks","COL":"Colorado Avalanche","CBJ":"Columbus Blue Jackets",
+    "DAL":"Dallas Stars","DET":"Detroit Red Wings","EDM":"Edmonton Oilers",
+    "FLA":"Florida Panthers","LAK":"Los Angeles Kings","MIN":"Minnesota Wild",
+    "MTL":"Montreal Canadiens","NSH":"Nashville Predators","NJD":"New Jersey Devils",
+    "NYI":"New York Islanders","NYR":"New York Rangers","OTT":"Ottawa Senators",
+    "PHI":"Philadelphia Flyers","PIT":"Pittsburgh Penguins","SEA":"Seattle Kraken",
+    "SJS":"San Jose Sharks","STL":"St. Louis Blues","TBL":"Tampa Bay Lightning",
+    "TOR":"Toronto Maple Leafs","UTA":"Utah Hockey Club","VAN":"Vancouver Canucks",
+    "VGK":"Vegas Golden Knights","WSH":"Washington Capitals","WPG":"Winnipeg Jets",
+}
+POPULAR_TEAMS = ["TOR","EDM","BOS","NYR","MTL","TBL","COL","VGK"]
 
-team = st.selectbox("Select team", ALL_TEAMS, index=ALL_TEAMS.index("TOR"), label_visibility="collapsed")
+# Quick-pick chips for popular teams
+st.markdown(
+    "<p style='color:rgba(255,255,255,0.3);font-size:9px;font-weight:700;text-transform:uppercase;"
+    "letter-spacing:0.1em;margin:0 0 4px;'>Quick pick</p>",
+    unsafe_allow_html=True,
+)
+qcols = st.columns(len(POPULAR_TEAMS))
+for i, t in enumerate(POPULAR_TEAMS):
+    with qcols[i]:
+        if st.button(t, key=f"qpick_{t}", use_container_width=True):
+            st.session_state["teams_selected"] = t
+            st.rerun()
+
+if "teams_selected" in st.session_state and st.session_state["teams_selected"] in ALL_TEAMS:
+    default_idx = ALL_TEAMS.index(st.session_state["teams_selected"])
+else:
+    default_idx = ALL_TEAMS.index("TOR")
+
+team = st.selectbox("Select team", ALL_TEAMS, index=default_idx, label_visibility="collapsed",
+                    key="teams_selectbox")
+st.session_state["teams_selected"] = team
 
 from lib.components import page_header
-page_header(team, "Current season · Regular season", data_date=get_data_date())
+page_header(TEAM_NAMES.get(team, team), "Current season · Regular season", data_date=get_data_date())
 
 try:
     df_season = query_fresh(f"""
@@ -77,7 +111,7 @@ if not df_season.empty:
     with c3:
         st.metric("GF / 10", f"{float(row['gf_avg_10g']):.2f}", f"GA: {float(row['ga_avg_10g']):.2f}")
     with c4:
-        st.metric("Form", fz_str, "5 vs 20 game")
+        st.metric("Momentum", fz_str, "5g vs 20g baseline")
 
 # ── Special teams row ─────────────────────────────────────────────────────────
 if not df_team_stats.empty:

@@ -10,11 +10,11 @@ from lib.auth import require_login
 from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
 from lib import userdb
 
-st.set_page_config(page_title="Screener – THA Analytics", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Player Finder – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 
-page_header("Player Screener", "Filter and rank players across any criteria", data_date=get_data_date())
+page_header("Player Finder", "Filter and rank players across any criteria", data_date=get_data_date())
 zscore_legend()
 
 # ── Presets ────────────────────────────────────────────────────────────────────
@@ -57,13 +57,13 @@ with st.expander("Filters", expanded=True):
     fc1, fc2, fc3 = st.columns(3)
 
     SORT_OPTIONS = {
-        "pts_zscore_5v20":   "Form (σ)",
+        "pts_zscore_5v20":   "Momentum",
         "pts_avg_5g":        "PTS / 5g",
         "pts_avg_20g":       "PTS / 20g",
         "pts_season":        "PTS season",
         "goals_season":      "Goals season",
-        "toi_avg_10g":       "TOI / game",
-        "goals_zscore_5v20": "Goals form (σ)",
+        "toi_avg_10g":       "Ice Time / game",
+        "goals_zscore_5v20": "Goals momentum",
     }
 
     with fc1:
@@ -78,11 +78,11 @@ with st.expander("Filters", expanded=True):
         min_gp = st.slider("", 1, 77, 10, label_visibility="collapsed", key="filter_gp")
 
     with fc2:
-        st.markdown("<p style='color:#8896a8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;'>Form z-score (5g vs 20g)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#8896a8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;'>Momentum (5g vs 20g baseline)</p>", unsafe_allow_html=True)
         z_range = st.slider("", -3.0, 3.0, (-3.0, 3.0),
                             step=0.1, label_visibility="collapsed", key="filter_z")
 
-        st.markdown("<p style='color:#8896a8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin:12px 0 4px;'>Min TOI / game (min)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#8896a8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin:12px 0 4px;'>Min ice time / game (min)</p>", unsafe_allow_html=True)
         min_toi = st.slider("", 0.0, 28.0, 0.0,
                             step=0.5, label_visibility="collapsed", key="filter_toi")
 
@@ -185,8 +185,8 @@ thead = (
     '<th style="padding:7px 8px;color:#5a8f4e;font-size:10px;font-weight:700;text-align:center;">PTS</th>'
     '<th style="padding:7px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">PTS/5g</th>'
     '<th style="padding:7px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">PTS/20g</th>'
-    '<th style="padding:7px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">TOI</th>'
-    '<th style="padding:7px 14px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">FORM</th>'
+    '<th style="padding:7px 8px;color:#8896a8;font-size:10px;font-weight:600;text-align:center;">ICE TIME</th>'
+    '<th style="padding:7px 14px;color:#5a8f4e;font-size:10px;font-weight:700;text-align:center;">MOMENTUM</th>'
     '</tr></thead>'
 )
 

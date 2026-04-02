@@ -1,4 +1,4 @@
-"""THA Terminal – Börsdata-style 3-panel hockey analytics terminal."""
+"""Deep Dive – 3-panel hockey analytics terminal."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -10,7 +10,7 @@ from lib.db import query, query_fresh, get_data_date
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 
-st.set_page_config(page_title="Terminal – THA Analytics", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Deep Dive – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 
 # ── Session state helper ───────────────────────────────────────────────────────
 def _ss(key, default):
@@ -22,30 +22,49 @@ def _ss(key, default):
 _render_sidebar()
 require_login()
 
+# ── Page header ─────────────────────────────────────────────────────────────────
+# Injected before CSS so it sits at top
+_header_date = get_data_date()
+
 # ── Terminal CSS ────────────────────────────────────────────────────────────────
 st.markdown("""<style>
 [data-testid="block-container"] {
-    padding-top:0.3rem !important; padding-bottom:0 !important;
-    padding-left:0.6rem !important; padding-right:0.6rem !important;
+    padding-top:0.4rem !important; padding-bottom:0 !important;
+    padding-left:0.8rem !important; padding-right:0.8rem !important;
 }
-[data-testid="stHorizontalBlock"] { gap:0 !important; }
+[data-testid="stHorizontalBlock"] { gap:6px !important; }
 [data-testid="stDataFrame"] thead th {
-    font-size:9px !important; text-transform:uppercase; letter-spacing:0.06em;
-    background:rgba(255,255,255,0.04) !important; padding:3px 6px !important;
+    font-size:11px !important; text-transform:uppercase; letter-spacing:0.05em;
+    background:rgba(255,255,255,0.04) !important; padding:5px 8px !important;
     color:#8896a8 !important;
 }
 [data-testid="stDataFrame"] tbody td {
-    font-size:11px !important; padding:2px 6px !important;
+    font-size:13px !important; padding:4px 8px !important;
     font-family:'SF Mono','Fira Code',monospace !important;
 }
-[data-testid="stDataFrame"] tbody tr { height:24px !important; }
-[data-testid="stDataFrame"] tbody tr:hover td { background:rgba(90,143,78,0.08) !important; }
+[data-testid="stDataFrame"] tbody tr { height:28px !important; }
+[data-testid="stDataFrame"] tbody tr:hover td { background:rgba(90,143,78,0.10) !important; }
+[data-testid="stDataFrame"] [aria-selected="true"] td { background:rgba(90,143,78,0.18) !important; border-left:2px solid #5a8f4e !important; }
 details summary { padding:3px 0 !important; font-size:10px !important; }
+/* Compact top-bar and filter buttons */
 div[data-testid="stButton"] > button {
-    padding:2px 10px !important; font-size:11px !important;
+    padding:3px 10px !important;
+    font-size:11px !important;
     line-height:1.5 !important;
+    min-height:32px !important;
+}
+/* Search input: no top label gap */
+div[data-testid="stTextInput"] { margin-top:0 !important; }
+div[data-testid="stTextInput"] > label { display:none !important; }
+div[data-testid="stTextInput"] input {
+    font-size:11px !important;
+    padding:6px 10px !important;
+    min-height:32px !important;
 }
 </style>""", unsafe_allow_html=True)
+
+from lib.components import page_header as _page_header
+_page_header("Deep Dive", "Players · Teams · Compare — click any row for full stats", data_date=_header_date)
 
 # ── Session state ───────────────────────────────────────────────────────────────
 _ss("t_mode",     "Players")   # Players | Teams | Compare
@@ -54,6 +73,7 @@ _ss("t_tab",      "Overview")  # Overview | Career | Splits
 _ss("t_filter",   "All")
 _ss("t_id",       None)
 _ss("t_search",   "")
+_ss("t_sort",     "z")         # sort column for left list
 _ss("t_cmp_a",    None)
 _ss("t_cmp_b",    None)
 _ss("t_cmp_type", "Skaters")   # Skaters | Teams
@@ -401,6 +421,17 @@ def _ha_compare_table(stats):
         )
     st.html(f'<div style="margin-bottom:14px;">{header}{rows}</div>')
 
+def _quick_thesis(z: float, gp: int) -> tuple[str, str]:
+    """Return (signal text, color) for the quick thesis card."""
+    conf = "low sample" if gp < 10 else ("building" if gp < 20 else f"{gp}GP")
+    if z >= 1.5:  return (f"Hot streak  ·  {conf}", "#f97316")
+    if z >= 0.8:  return (f"Trending up  ·  {conf}", "#5a8f4e")
+    if z >= 0.3:  return (f"Slightly above avg  ·  {conf}", "#5a8f4e")
+    if z > -0.3:  return (f"Baseline range  ·  {conf}", "#8896a8")
+    if z > -0.8:  return (f"Slightly below avg  ·  {conf}", "#8896a8")
+    if z > -1.5:  return (f"Slumping  ·  {conf}", "#87ceeb")
+    return (f"Cold spell  ·  {conf}", "#87ceeb")
+
 def _style_sigma(val):
     if pd.isna(val): return "color:#8896a8"
     v = float(val)
@@ -413,66 +444,88 @@ def _style_sigma(val):
 # ══════════════════════════════════════════════════════════════════════════════
 #  TOP BAR
 # ══════════════════════════════════════════════════════════════════════════════
-top_mode, top_tab, top_search = st.columns([2.2, 3, 2.5])
+_mode_help = {
+    "Players": "Browse individual skaters and goalies",
+    "Teams":   "Browse all 32 NHL teams",
+    "Compare": "Compare two players or teams side by side",
+}
+_tab_help = {
+    "Overview": "Current season form, recent games and chart",
+    "Career":   "Career arc and season-by-season stats",
+    "Splits":   "Home vs away and situational breakdown",
+}
 
-# Mode buttons
-with top_mode:
+# Row 1 – what to browse + view (side by side)
+col_browse, col_view = st.columns([3, 3])
+with col_browse:
+    st.markdown(
+        "<p style='color:rgba(255,255,255,0.35);font-size:9px;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:0.1em;margin:0 0 3px;'>"
+        "What to browse</p>",
+        unsafe_allow_html=True,
+    )
     mc = st.columns(3)
     for i, m in enumerate(["Players", "Teams", "Compare"]):
         with mc[i]:
             active = st.session_state.t_mode == m
             if st.button(m, key=f"mode_{m}", use_container_width=True,
-                         type="primary" if active else "secondary"):
+                         type="primary" if active else "secondary",
+                         help=_mode_help[m]):
                 st.session_state.t_mode  = m
                 st.session_state.t_id    = None
                 st.session_state.t_filter= "All"
                 st.session_state.t_tab   = "Overview"
                 st.rerun()
 
-# Tab buttons (hidden in Compare mode)
-with top_tab:
+with col_view:
     if st.session_state.t_mode != "Compare":
-        TABS = ["Overview", "Career", "Splits"]
-        tc = st.columns(len(TABS))
-        for i, t in enumerate(TABS):
+        st.markdown(
+            "<p style='color:rgba(255,255,255,0.35);font-size:9px;font-weight:700;"
+            "text-transform:uppercase;letter-spacing:0.1em;margin:0 0 3px;'>"
+            "How to view selected</p>",
+            unsafe_allow_html=True,
+        )
+        tc = st.columns(3)
+        for i, t in enumerate(["Overview", "Career", "Splits"]):
             with tc[i]:
                 active = st.session_state.t_tab == t
                 if st.button(t, key=f"tab_{t}", use_container_width=True,
-                             type="primary" if active else "secondary"):
+                             type="primary" if active else "secondary",
+                             help=_tab_help[t]):
                     st.session_state.t_tab = t
                     st.rerun()
-    else:
-        # Compare sub-type
-        ct = st.columns(3)
-        for i, tp in enumerate(["Skaters", "Goalies", "Teams"]):
-            with ct[i]:
-                active = st.session_state.t_cmp_type == tp
-                if st.button(tp, key=f"cmp_type_{tp}", use_container_width=True,
-                             type="primary" if active else "secondary"):
-                    st.session_state.t_cmp_type = tp
-                    st.session_state.t_cmp_a = None
-                    st.session_state.t_cmp_b = None
-                    st.rerun()
 
-# Search
-with top_search:
-    st.session_state.t_search = st.text_input(
-        "", placeholder="Search player or team…",
-        label_visibility="collapsed",
-        value=st.session_state.t_search,
-        key="t_search_input",
-    )
-
-# Data date caption
+# Compact tip strip below the buttons
+_tip_lines = {
+    "Players": "① Pick Skaters or Goalies &nbsp;·&nbsp; ② Filter by conf/division/form &nbsp;·&nbsp; ③ Click a row to see full stats →",
+    "Teams":   "① Filter by conference or division &nbsp;·&nbsp; ② Click a row to see team stats →",
+    "Compare": "① Pick Skaters / Goalies / Teams &nbsp;·&nbsp; ② Choose Entity A and B &nbsp;·&nbsp; ③ Stats appear side by side →",
+}
+tip = _tip_lines.get(st.session_state.t_mode, "")
 st.markdown(
-    f"<p style='color:rgba(255,255,255,0.2);font-size:9px;font-family:monospace;"
-    f"margin:1px 0 3px;'>NHL · THA Analytics · {get_data_date()}</p>",
+    f"<p style='color:#8896a8;font-size:10px;margin:4px 0 0;line-height:1.5;'>"
+    f"<span style='color:#5a8f4e;font-weight:700;margin-right:6px;'>?</span>{tip}</p>",
     unsafe_allow_html=True,
 )
+
 
 mode   = st.session_state.t_mode
 tab    = st.session_state.t_tab
 search = st.session_state.t_search
+
+# Sub-type row for Compare mode (Skaters / Goalies / Teams)
+if mode == "Compare":
+    ct = st.columns([1, 1, 1, 7])
+    for i, tp in enumerate(["Skaters", "Goalies", "Teams"]):
+        with ct[i]:
+            active = st.session_state.t_cmp_type == tp
+            if st.button(tp, key=f"cmp_type_{tp}", use_container_width=True,
+                         type="primary" if active else "secondary"):
+                st.session_state.t_cmp_type = tp
+                st.session_state.t_cmp_a = None
+                st.session_state.t_cmp_b = None
+                st.rerun()
+    st.markdown("<div style='height:3px;'></div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  COMPARE MODE — full-width dual entity view
@@ -500,7 +553,7 @@ if mode == "Compare":
     keys_list = list(cmp_opts.keys())
     labels_list = list(cmp_opts.values())
 
-    sel_a_col, sel_b_col = st.columns(2)
+    sel_a_col, sel_b_col, cmp_ctrl_col = st.columns([4, 4, 2])
     with sel_a_col:
         idx_a = keys_list.index(st.session_state.t_cmp_a) if st.session_state.t_cmp_a in keys_list else 0
         sel_a = st.selectbox("Entity A", options=keys_list, format_func=lambda k: cmp_opts[k],
@@ -514,6 +567,16 @@ if mode == "Compare":
                              index=idx_b, key="cmp_sel_b")
         if sel_b != st.session_state.t_cmp_b:
             st.session_state.t_cmp_b = sel_b
+            st.rerun()
+    with cmp_ctrl_col:
+        st.markdown("<div style='height:22px;'></div>", unsafe_allow_html=True)
+        if st.button("⇄ Swap", key="cmp_swap", use_container_width=True, help="Swap A and B"):
+            st.session_state.t_cmp_a, st.session_state.t_cmp_b = (
+                st.session_state.t_cmp_b, st.session_state.t_cmp_a)
+            st.rerun()
+        if st.button("✕ Reset", key="cmp_reset", use_container_width=True, help="Clear both selections"):
+            st.session_state.t_cmp_a = None
+            st.session_state.t_cmp_b = None
             st.rerun()
 
     id_a = st.session_state.t_cmp_a or keys_list[0]
@@ -580,7 +643,7 @@ if mode == "Compare":
                       f"{float(row_b['pp_pct']):.1f}%" if pd.notna(row_b['pp_pct']) else "—",  "#f97316"),
             ("PK%",   f"{float(row_a['pk_pct']):.1f}%" if pd.notna(row_a['pk_pct']) else "—",
                       f"{float(row_b['pk_pct']):.1f}%" if pd.notna(row_b['pk_pct']) else "—",  "#87ceeb"),
-            ("Form σ",_z_str(row_a["z"]), _z_str(row_b["z"]), "#8896a8"),
+            ("Momentum",_z_str(row_a["z"]), _z_str(row_b["z"]), "#8896a8"),
         ]
     elif cmp_type == "Goalies":
         sv_a = float(row_a["sv_pct"]) if pd.notna(row_a["sv_pct"]) else 0
@@ -595,7 +658,7 @@ if mode == "Compare":
             ("SO",    int(row_a["so"]) if pd.notna(row_a["so"]) else 0,
                       int(row_b["so"]) if pd.notna(row_b["so"]) else 0, "#8896a8"),
             ("Sv%/5g",f"{float(row_a['sv5']):.2f}%", f"{float(row_b['sv5']):.2f}%", "#f97316"),
-            ("Form σ",_z_str(row_a["z"]), _z_str(row_b["z"]), "#8896a8"),
+            ("Momentum",_z_str(row_a["z"]), _z_str(row_b["z"]), "#8896a8"),
         ]
     else:  # Skaters
         pm_a = (f"+{int(row_a['pm'])}" if row_a['pm']>0 else str(int(row_a['pm']))) if pd.notna(row_a['pm']) else "—"
@@ -609,9 +672,9 @@ if mode == "Compare":
             ("PPP",   int(row_a["ppp"]) if pd.notna(row_a["ppp"]) else "—",
                       int(row_b["ppp"]) if pd.notna(row_b["ppp"]) else "—", "#87ceeb"),
             ("5g avg",f"{row_a['avg5']:.2f}", f"{row_b['avg5']:.2f}", "#f97316"),
-            ("TOI",   f"{row_a['toi']:.1f}" if pd.notna(row_a['toi']) else "—",
+            ("Ice Time", f"{row_a['toi']:.1f}" if pd.notna(row_a['toi']) else "—",
                       f"{row_b['toi']:.1f}" if pd.notna(row_b['toi']) else "—", "#8896a8"),
-            ("Form σ",_z_str(row_a["z"]), _z_str(row_b["z"]), "#8896a8"),
+            ("Momentum",_z_str(row_a["z"]), _z_str(row_b["z"]), "#8896a8"),
         ]
 
     # Render comparison as colored table
@@ -629,7 +692,7 @@ if mode == "Compare":
                 cb = col if fb > fa  else "#8896a8"
         except Exception:
             ca = cb = col
-        bold = "font-weight:700;" if stat_label in ("PTS","Sv%","Form σ","5g avg") else ""
+        bold = "font-weight:700;" if stat_label in ("PTS","Sv%","Momentum","5g avg") else ""
         rows_html += (
             f'<div style="display:grid;grid-template-columns:1fr 90px 1fr;'
             f'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
@@ -657,7 +720,7 @@ if mode == "Compare":
 
     # ── Overlaid form chart (skaters/goalies) ───────────────────────────────────
     if cmp_type in ("Skaters", "Goalies") and cmp_type != "Teams":
-        _panel_header("Form comparison — rolling 5-game average")
+        _panel_header("Momentum — rolling 5-game average")
         if cmp_type == "Skaters":
             dfa = _player_form_series(int(id_a))
             dfb = _player_form_series(int(id_b))
@@ -717,22 +780,42 @@ if mode == "Compare":
 # ══════════════════════════════════════════════════════════════════════════════
 #  BUILD FILTERED LIST  (Players / Teams modes)
 # ══════════════════════════════════════════════════════════════════════════════
-# Sub-mode chips for Players
+# Sub-mode chips + search on same row
 if mode == "Players":
     sub_chips = ["Skaters", "Goalies"]
-    sc = st.columns(len(sub_chips) + 10)
-    for i, s in enumerate(sub_chips):
-        with sc[i]:
-            active = st.session_state.t_sub == s
-            if st.button(s, key=f"sub_{s}", use_container_width=True,
-                         type="primary" if active else "secondary"):
-                st.session_state.t_sub   = s
-                st.session_state.t_id    = None
-                st.session_state.t_filter= "All"
-                st.rerun()
-    st.markdown("<div style='height:3px;'></div>", unsafe_allow_html=True)
+    sc_left, sc_right = st.columns([3, 5])
+    with sc_left:
+        sc = st.columns(2)
+        for i, s in enumerate(sub_chips):
+            with sc[i]:
+                active = st.session_state.t_sub == s
+                if st.button(s, key=f"sub_{s}", use_container_width=True,
+                             type="primary" if active else "secondary"):
+                    st.session_state.t_sub   = s
+                    st.session_state.t_id    = None
+                    st.session_state.t_filter= "All"
+                    st.rerun()
+    with sc_right:
+        st.session_state.t_search = st.text_input(
+            "", placeholder="🔍  Search player…",
+            label_visibility="collapsed",
+            value=st.session_state.t_search,
+            key="t_search_input",
+        )
+else:
+    # Teams mode – search on its own
+    _, search_col = st.columns([3, 5])
+    with search_col:
+        st.session_state.t_search = st.text_input(
+            "", placeholder="🔍  Search team…",
+            label_visibility="collapsed",
+            value=st.session_state.t_search,
+            key="t_search_input",
+        )
 
-# Filter chips — styled as "liga/index" tabs like Börsdata
+st.markdown("<div style='height:2px;'></div>", unsafe_allow_html=True)
+
+# Filter chips
 if mode == "Players" and st.session_state.t_sub == "Skaters":
     filters = ["All","East","West","ATL","MET","CEN","PAC","Fwd","Def","Hot","Cold"]
 elif mode == "Players":
@@ -740,7 +823,7 @@ elif mode == "Players":
 else:
     filters = ["All","East","West","ATL","MET","CEN","PAC"]
 
-flt_cols = st.columns(len(filters) + 4)
+flt_cols = st.columns(len(filters))
 for i, f in enumerate(filters):
     with flt_cols[i]:
         active = st.session_state.t_filter == f
@@ -789,6 +872,22 @@ if search:
 
 df_src = df_src.reset_index(drop=True)
 
+# ── Sort left list ───────────────────────────────────────────────────────────
+_SORT_OPTS_SKATER = {"z": "Momentum", "pts": "PTS", "avg5": "5g avg", "gp": "GP"}
+_SORT_OPTS_GOALIE = {"z": "Momentum", "sv_pct": "Sv%", "gp": "GP"}
+_SORT_OPTS_TEAM   = {"z": "Momentum", "pts": "PTS"}
+
+_is_goalie_pre = (mode == "Players" and st.session_state.t_sub == "Goalies")
+_sort_opts_now = (_SORT_OPTS_GOALIE if _is_goalie_pre else
+                  _SORT_OPTS_TEAM   if mode == "Teams"  else
+                  _SORT_OPTS_SKATER)
+
+if st.session_state.t_sort not in _sort_opts_now:
+    st.session_state.t_sort = list(_sort_opts_now.keys())[0]
+
+if not df_src.empty and st.session_state.t_sort in df_src.columns:
+    df_src = df_src.sort_values(st.session_state.t_sort, ascending=False).reset_index(drop=True)
+
 # Auto-select top entity
 if st.session_state.t_id is None and not df_src.empty:
     st.session_state.t_id = df_src.iloc[0]["abbr" if mode == "Teams" else "pid"]
@@ -796,39 +895,77 @@ if st.session_state.t_id is None and not df_src.empty:
 # ══════════════════════════════════════════════════════════════════════════════
 #  3-PANEL LAYOUT
 # ══════════════════════════════════════════════════════════════════════════════
-col_left, col_center, col_right = st.columns([1.5, 3.5, 1.7], gap="small")
+col_left, col_center, col_right = st.columns([1.7, 3.7, 1.6], gap="small")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  LEFT PANEL
 # ─────────────────────────────────────────────────────────────────────────────
 with col_left:
-    st.markdown(
-        f"<p style='color:#8896a8;font-size:9px;margin:0 0 3px;font-family:monospace;'>"
-        f"{'NHL · ' + ('SKATERS' if mode=='Players' and st.session_state.t_sub=='Skaters' else 'GOALIES' if mode=='Players' else 'TEAMS')}"
-        f" · {len(df_src)} shown</p>",
-        unsafe_allow_html=True,
-    )
+    # Sort + count row
+    _lbl_mode = ('SKATERS' if mode=='Players' and st.session_state.t_sub=='Skaters'
+                 else 'GOALIES' if mode=='Players' else 'TEAMS')
+    _sort_label_col, _sort_sel_col = st.columns([3, 4])
+    with _sort_label_col:
+        st.markdown(
+            f"<p style='color:#8896a8;font-size:10px;margin:6px 0 0;font-family:monospace;'>"
+            f"NHL · {_lbl_mode} · {len(df_src)}</p>",
+            unsafe_allow_html=True,
+        )
+    with _sort_sel_col:
+        _new_sort = st.selectbox(
+            "Sort", list(_sort_opts_now.keys()),
+            format_func=lambda x: _sort_opts_now[x],
+            index=list(_sort_opts_now.keys()).index(st.session_state.t_sort),
+            label_visibility="collapsed", key="t_sort_select",
+        )
+        if _new_sort != st.session_state.t_sort:
+            st.session_state.t_sort = _new_sort
+            st.rerun()
 
     is_goalie_mode = (mode == "Players" and st.session_state.t_sub == "Goalies")
 
-    if mode == "Players" and not is_goalie_mode:
-        df_disp = df_src[["name","team","pos","pts","avg5","z"]].copy()
-        df_disp.columns = ["Player","Tm","P","PTS","5g","σ"]
-    elif is_goalie_mode:
-        df_disp = df_src[["name","team","gp","sv_pct","z"]].copy()
-        df_disp.columns = ["Goalie","Tm","GP","Sv%","σ"]
-    else:
-        df_disp = df_src[["abbr","div","pts","pp_pct","z"]].copy()
-        df_disp.columns = ["Team","Div","PTS","PP%","σ"]
+    # Sort value column label + data
+    _sort_col_now = st.session_state.t_sort
+    _sort_col_label = _sort_opts_now.get(_sort_col_now, _sort_col_now)
 
-    styled = df_disp.style.applymap(_style_sigma, subset=["σ"])
+    if mode == "Players" and not is_goalie_mode:
+        df_disp = df_src[["name","team", _sort_col_now]].copy()
+        df_disp["_name"] = df_disp["name"] + "  ·  " + df_disp["team"]
+        df_disp = df_disp[["_name", _sort_col_now]].copy()
+        df_disp.columns = ["Player", _sort_col_label]
+        col_cfg = {
+            "Player":         st.column_config.TextColumn("Player", width="medium"),
+            _sort_col_label:  st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f"),
+        }
+    elif is_goalie_mode:
+        df_disp = df_src[["name","team", _sort_col_now]].copy()
+        df_disp["_name"] = df_disp["name"] + "  ·  " + df_disp["team"]
+        df_disp = df_disp[["_name", _sort_col_now]].copy()
+        df_disp.columns = ["Goalie", _sort_col_label]
+        col_cfg = {
+            "Goalie":         st.column_config.TextColumn("Goalie", width="medium"),
+            _sort_col_label:  st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f"),
+        }
+    else:
+        df_disp = df_src[["abbr", _sort_col_now]].copy()
+        df_disp.columns = ["Team", _sort_col_label]
+        col_cfg = {
+            "Team":           st.column_config.TextColumn("Team", width="medium"),
+            _sort_col_label:  st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f"),
+        }
+
+    _sigma_col = _sort_col_label if _sort_col_label in df_disp.columns else None
+    styled = df_disp.style.applymap(_style_sigma, subset=[_sigma_col]) if _sigma_col else df_disp.style
+
+    _tbl_h = min(520, max(180, len(df_src) * 30 + 42))
 
     event = st.dataframe(
         styled,
+        column_config=col_cfg,
         on_select="rerun",
         selection_mode="single-row",
         use_container_width=True,
-        height=590,
+        height=_tbl_h,
         hide_index=True,
     )
 
@@ -907,7 +1044,7 @@ with col_center:
                     ("PTS",   int(row["pts"]),        "#5a8f4e"),
                     ("+/-",   pm_s,                   pm_c),
                     ("PPP",   ppp,                    "#87ceeb"),
-                    ("TOI",   toi,                    "#8896a8"),
+                    ("Ice Time", toi,                "#8896a8"),
                 ]
                 for i,(lbl,val,col) in enumerate(summary):
                     with sb_cols[i]:
@@ -1078,7 +1215,7 @@ with col_center:
                         ("A",   _hv(h,"a"),                       _hv(a,"a"),                       "#8896a8"),
                         ("PTS", _hv(h,"pts"),                     _hv(a,"pts"),                     "#5a8f4e"),
                         ("Avg", _hv(h,"avg_pts",lambda v:f"{v:.2f}"), _hv(a,"avg_pts",lambda v:f"{v:.2f}"), "#f97316"),
-                        ("TOI", _hv(h,"avg_toi",lambda v:f"{v:.1f}"), _hv(a,"avg_toi",lambda v:f"{v:.1f}"), "#8896a8"),
+                        ("Ice Time", _hv(h,"avg_toi",lambda v:f"{v:.1f}"), _hv(a,"avg_toi",lambda v:f"{v:.1f}"), "#8896a8"),
                     ])
 
                     _panel_header("Situation — current season")
@@ -1211,7 +1348,7 @@ with col_center:
                             f'<th style="padding:4px 6px;color:#8896a8;font-size:9px;text-align:center;">SV</th>'
                             f'<th style="padding:4px 6px;color:#f97316;font-size:9px;text-align:center;">Sv%</th>'
                             f'<th style="padding:4px 6px;color:#c41e3a;font-size:9px;text-align:center;">GA</th>'
-                            f'<th style="padding:4px 10px;color:#8896a8;font-size:9px;text-align:right;">TOI</th>'
+                            f'<th style="padding:4px 10px;color:#8896a8;font-size:9px;text-align:right;">Min</th>'
                             f'</tr></thead><tbody>{rows_html}</tbody></table>'
                         )
 
@@ -1454,6 +1591,7 @@ with col_right:
                     meta_rows = ""
 
                 insight = _ai_insight(row["name"], row["team"])
+                thesis_text, thesis_color = _quick_thesis(float(row["z"]), int(row["gp"]))
 
                 st.html(f"""
                 <div style="border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px;">
@@ -1465,9 +1603,13 @@ with col_right:
                     </div>
                   </div>
                   <div style="color:{zc};font-weight:900;font-size:20px;font-family:monospace;
-                              text-align:center;padding:6px 0 8px;
+                              text-align:center;padding:6px 0 4px;
                               border-bottom:1px solid rgba(255,255,255,0.07);
-                              margin-bottom:8px;">{_z_str(row['z'])}</div>
+                              margin-bottom:6px;">{_z_str(row['z'])}</div>
+                  <div style="background:{thesis_color}14;border:1px solid {thesis_color}33;
+                              border-radius:4px;padding:5px 8px;margin-bottom:8px;text-align:center;">
+                    <span style="color:{thesis_color};font-size:10px;font-weight:600;">{thesis_text}</span>
+                  </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px;">
                     {_stat_block('PTS',  int(row['pts']),                  '#5a8f4e', 15)}
                     {_stat_block('+/-',  pm_s,                             pm_c,      15)}
@@ -1482,6 +1624,21 @@ with col_right:
                      style="color:#5a8f4e;font-size:10px;text-decoration:underline;text-underline-offset:3px;">
                     Full career profile →</a>
                 </div>""")
+
+                # Watchlist button
+                from lib import userdb as _udb
+                _watched_ids = _udb.watchlist_ids()
+                _is_watched  = sel_id in _watched_ids
+                if _is_watched:
+                    if st.button("✓ Watching", key=f"rp_watch_{sel_id}",
+                                 use_container_width=True, type="secondary"):
+                        _udb.watchlist_remove(sel_id)
+                        st.rerun()
+                else:
+                    if st.button("+ Watch player", key=f"rp_watch_{sel_id}",
+                                 use_container_width=True, type="primary"):
+                        _udb.watchlist_add(sel_id, row["name"], row["team"], row["pos"])
+                        st.rerun()
 
         elif mode == "Players" and is_goalie_mode:
             row = df_src[df_src["pid"] == sel_id]
@@ -1516,6 +1673,7 @@ with col_right:
                 else:
                     meta_g = ""
 
+                g_thesis_text, g_thesis_color = _quick_thesis(float(row["z"]), int(row["gp"]))
                 st.html(f"""
                 <div style="border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px;">
                   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -1526,8 +1684,12 @@ with col_right:
                     </div>
                   </div>
                   <div style="color:{zc};font-weight:900;font-size:20px;font-family:monospace;
-                              text-align:center;padding:6px 0 8px;
-                              border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:8px;">{_z_str(row['z'])}</div>
+                              text-align:center;padding:6px 0 4px;
+                              border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:6px;">{_z_str(row['z'])}</div>
+                  <div style="background:{g_thesis_color}14;border:1px solid {g_thesis_color}33;
+                              border-radius:4px;padding:5px 8px;margin-bottom:8px;text-align:center;">
+                    <span style="color:{g_thesis_color};font-size:10px;font-weight:600;">{g_thesis_text}</span>
+                  </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px;">
                     {_stat_block('Sv%',   f'{sv:.2f}%',                               sv_c,   14)}
                     {_stat_block('GAA',   f'{gaa:.2f}',                               gaa_c,  14)}
@@ -1601,7 +1763,7 @@ st.markdown(
       <span style="color:#87ceeb;font-size:9px;">■ Below avg σ ≤ −0.5</span>
       <span style="color:#3b82f6;font-size:9px;">■ Cold σ ≤ −1.5</span>
       <span style="color:rgba(255,255,255,0.2);font-size:9px;margin-left:6px;">
-        σ = z-score vs 20g baseline · click row to select · ◀ toggle sidebar</span>
+        σ = z-score vs 20g baseline · click row to select</span>
     </div>""",
     unsafe_allow_html=True,
 )

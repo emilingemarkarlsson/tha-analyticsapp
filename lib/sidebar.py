@@ -1,36 +1,9 @@
 """Shared sidebar and global CSS – call render() on every page."""
 import streamlit as st
-import streamlit.components.v1 as _components
 
 
 def render() -> None:
     """Inject global CSS and render sidebar navigation."""
-    # Force sidebar open on first render of this session (localStorage may have it closed).
-    if not st.session_state.get("_sidebar_opened"):
-        st.session_state["_sidebar_opened"] = True
-        _components.html("""
-        <script>
-        (function() {
-            function expand() {
-                try {
-                    var p = window.parent;
-                    // Clear any stored collapsed state
-                    Object.keys(p.localStorage).forEach(function(k) {
-                        if (k.indexOf('sidebar') !== -1 || k.indexOf('Sidebar') !== -1) {
-                            p.localStorage.removeItem(k);
-                        }
-                    });
-                    // Click expand button if sidebar is collapsed
-                    var btn = p.document.querySelector('[data-testid="collapsedControl"] button');
-                    if (btn) { btn.click(); }
-                } catch(e) {}
-            }
-            if (document.readyState === 'complete') { expand(); }
-            else { window.addEventListener('load', expand); }
-            setTimeout(expand, 300);
-        })();
-        </script>
-        """, height=0)
 
     st.markdown(
         """
@@ -38,10 +11,18 @@ def render() -> None:
         #MainMenu, footer, header { visibility: hidden; }
         [data-testid="stSidebarNav"] { display: none !important; }
 
+        /* ── Force sidebar always visible ─────────────────── */
         section[data-testid="stSidebar"] {
+            transform: translateX(0px) !important;
+            min-width: 244px !important;
+            width: 244px !important;
+            visibility: visible !important;
+            display: flex !important;
             background: #050505;
             border-right: 1px solid rgba(255,255,255,0.08);
         }
+        /* Hide the collapse arrow – sidebar is always open */
+        [data-testid="collapsedControl"] { display: none !important; }
 
         div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
             border: 1px solid rgba(255,255,255,0.09);
@@ -68,30 +49,32 @@ def render() -> None:
             color: #f1f5f9 !important;
         }
 
-        div[data-testid="stButton"] button {
+        /* Primary buttons – THA green */
+        div[data-testid="stButton"] button[kind="primary"] {
             background: #5a8f4e !important;
-            color: white !important;
-            border: none !important;
-            font-weight: 600 !important;
+            color: #fff !important;
+            border: 1px solid #5a8f4e !important;
+            font-weight: 700 !important;
             border-radius: 4px !important;
+        }
+        /* Secondary buttons – muted/inactive */
+        div[data-testid="stButton"] button[kind="secondary"] {
+            background: rgba(255,255,255,0.04) !important;
+            color: #8896a8 !important;
+            border: 1px solid rgba(255,255,255,0.08) !important;
+            font-weight: 500 !important;
+            border-radius: 4px !important;
+        }
+        div[data-testid="stButton"] button[kind="secondary"]:hover {
+            background: rgba(255,255,255,0.09) !important;
+            color: #f1f5f9 !important;
+            border-color: rgba(255,255,255,0.18) !important;
         }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
 
-        /* Make the sidebar expand/collapse arrow clearly visible */
-        [data-testid="collapsedControl"] {
-            background: rgba(90,143,78,0.25) !important;
-            border-right: 2px solid #5a8f4e !important;
-            width: 28px !important;
-            min-width: 28px !important;
-        }
-        [data-testid="collapsedControl"] svg {
-            fill: #5a8f4e !important;
-            width: 20px !important;
-            height: 20px !important;
-        }
 
         /* ── Mobile responsiveness ──────────────────────── */
         @media (max-width: 768px) {
@@ -162,25 +145,33 @@ def render() -> None:
             unsafe_allow_html=True,
         )
         st.page_link("app.py",                    label="Intelligence Feed", icon=":material/trending_up:")
-        st.page_link("pages/1_Terminal.py",        label="Terminal",          icon=":material/terminal:")
-        st.page_link("pages/2_Standings.py",      label="Standings",        icon=":material/leaderboard:")
-        st.page_link("pages/3_Players.py",        label="Players",          icon=":material/person:")
-        st.page_link("pages/4_Teams.py",          label="Teams",            icon=":material/shield:")
-        st.page_link("pages/8_Player_History.py", label="Player History",   icon=":material/show_chart:")
-        st.page_link("pages/9_Team_History.py",   label="Team History",     icon=":material/history:")
-        st.page_link("pages/11_Goalies.py",        label="Goalies",          icon=":material/sports:")
-        st.page_link("pages/12_Playoffs.py",       label="Playoffs",         icon=":material/emoji_events:")
+        st.page_link("pages/5_Chat.py",           label="Ask AI",            icon=":material/chat:")
+        st.page_link("pages/2_Standings.py",      label="Standings",         icon=":material/leaderboard:")
+        st.page_link("pages/3_Players.py",        label="Players",           icon=":material/person:")
+        st.page_link("pages/4_Teams.py",          label="Teams",             icon=":material/shield:")
+        st.page_link("pages/11_Goalies.py",       label="Goalies",           icon=":material/sports:")
+        st.page_link("pages/12_Playoffs.py",      label="Playoffs",          icon=":material/emoji_events:")
 
-        # ── Nav group: Tools ───────────────────────────────────────────────────
+        # ── Nav group: Analyse ─────────────────────────────────────────────────
         st.markdown(
             "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
             "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
-            "margin:10px 0 2px;'>Tools</p>",
+            "margin:10px 0 2px;'>Analyse</p>",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/6_Screener.py",  label="Screener",       icon=":material/filter_list:")
+        st.page_link("pages/1_Deep_Dive.py",        label="Deep Dive",        icon=":material/analytics:")
+        st.page_link("pages/6_Screener.py",        label="Player Finder",    icon=":material/manage_search:")
+        st.page_link("pages/8_Player_History.py",  label="Player History",   icon=":material/show_chart:")
+        st.page_link("pages/9_Team_History.py",    label="Team History",     icon=":material/history:")
+
+        # ── Nav group: My Room ─────────────────────────────────────────────────
+        st.markdown(
+            "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
+            "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
+            "margin:10px 0 2px;'>My Room</p>",
+            unsafe_allow_html=True,
+        )
         st.page_link("pages/7_Watchlist.py", label="My Hockey Room", icon=":material/folder_special:")
-        st.page_link("pages/5_Chat.py",      label="AI Chat",        icon=":material/chat:")
 
         # ── Nav group: Account ─────────────────────────────────────────────────
         st.markdown(

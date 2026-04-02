@@ -28,7 +28,11 @@ with tab_watch:
     watched = userdb.watchlist_all()
 
     if not watched:
-        st.info("Your watchlist is empty. Use the Screener to add players.")
+        st.markdown(
+            "<p style='color:#8896a8;font-size:13px;margin-bottom:12px;'>Your watchlist is empty. Find players to track and add them here.</p>",
+            unsafe_allow_html=True,
+        )
+        st.page_link("pages/6_Screener.py", label="Find players in Player Finder", icon=":material/manage_search:")
     else:
         player_ids = [p["player_id"] for p in watched]
         ids_sql = "','".join(player_ids)

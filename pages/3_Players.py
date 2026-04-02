@@ -13,7 +13,7 @@ st.set_page_config(page_title="Players – THA Analytics", layout="wide", initia
 _render_sidebar()
 require_login()
 
-page_header("Players", "Current season form · 5-game vs 20-game baseline z-score", data_date=get_data_date())
+page_header("Players", "Current season · 5-game momentum vs 20-game baseline", data_date=get_data_date())
 zscore_legend()
 
 try:
@@ -42,7 +42,7 @@ with c2:
         "",
         ["pts_zscore_5v20", "pts_avg_5g", "pts_avg_20g", "goals_season", "assists_season", "gp_season"],
         format_func=lambda x: {
-            "pts_zscore_5v20": "Form (σ)",
+            "pts_zscore_5v20": "Momentum",
             "pts_avg_5g": "PTS/5",
             "pts_avg_20g": "PTS/20",
             "goals_season": "Goals",
@@ -98,7 +98,7 @@ st.markdown(
           <th style="text-align:center;padding:9px 8px;color:#8896a8;font-size:10px;font-weight:600;">A</th>
           <th style="text-align:center;padding:9px 8px;color:#8896a8;font-size:10px;font-weight:600;">PTS/5</th>
           <th style="text-align:center;padding:9px 8px;color:#8896a8;font-size:10px;font-weight:600;">PTS/20</th>
-          <th style="text-align:center;padding:9px 8px;color:#5a8f4e;font-size:10px;font-weight:700;">Form (σ)</th>
+          <th style="text-align:center;padding:9px 8px;color:#5a8f4e;font-size:10px;font-weight:700;" title="Momentum: z-score of last 5 games vs 20-game rolling average">Momentum</th>
         </tr>
       </thead>
       <tbody>{rows_html}</tbody>
@@ -109,4 +109,4 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-data_source_footer('Form (σ) = z-score of last 5 games vs 20-game rolling average')
+data_source_footer('Momentum = z-score of last 5 games vs 20-game rolling average')

@@ -64,6 +64,7 @@ div[data-testid="stTextInput"] input {
 </style>""", unsafe_allow_html=True)
 
 from lib.components import page_header as _page_header
+from lib.entitlements import gate, soft_gate, has_feature, watchlist_slots_remaining
 _page_header("Deep Dive", "Players · Teams · Compare — click any row for full stats", data_date=_header_date)
 
 # ── Session state ───────────────────────────────────────────────────────────────
@@ -1203,6 +1204,8 @@ with col_center:
 
                 # ── CAREER TAB ────────────────────────────────────────────────
                 elif tab == "Career":
+                    gate("deep_dive_career", "Career & Splits",
+                         "Karriärdata för alla 16 säsonger tillgängligt på Base-plan.")
                     df_car = _player_career(int(sel_id))
                     if not df_car.empty:
                         fig_arc = go.Figure()
@@ -1252,6 +1255,8 @@ with col_center:
 
                 # ── SPLITS TAB ────────────────────────────────────────────────
                 elif tab == "Splits":
+                    gate("deep_dive_splits", "Home / Away Splits",
+                         "Situationsdata och hemma/borta-splits ingår i Base-plan.")
                     splits = _player_splits(int(sel_id))
                     ha_df  = splits["ha"]
                     sit_df = splits["sit"]
@@ -1710,17 +1715,25 @@ with col_right:
 
                 # Watchlist button
                 from lib import userdb as _udb
-                _watched_ids = _udb.watchlist_ids()
+                from lib.auth import get_user as _get_user
+                _uid = (_get_user() or {}).get("id", "")
+                _watched_ids = _udb.watchlist_ids(_uid)
                 _is_watched  = sel_id in _watched_ids
                 if _is_watched:
                     if st.button("✓ Watching", key=f"rp_watch_{sel_id}",
                                  use_container_width=True, type="secondary"):
-                        _udb.watchlist_remove(sel_id)
+                        _udb.watchlist_remove(sel_id, _uid)
                         st.rerun()
+                elif not has_feature("watchlist"):
+                    soft_gate("watchlist", "Watchlist",
+                              "Spåra dina favoritspelare med Base-plan.")
+                elif watchlist_slots_remaining(_uid) <= 0:
+                    soft_gate("watchlist_unlimited", "Fler watchlist-platser",
+                              "Base ger 10 platser — Plus ger obegränsat.")
                 else:
                     if st.button("+ Watch player", key=f"rp_watch_{sel_id}",
                                  use_container_width=True, type="primary"):
-                        _udb.watchlist_add(sel_id, row["name"], row["team"], row["pos"])
+                        _udb.watchlist_add(sel_id, row["name"], row["team"], row["pos"], _uid)
                         st.rerun()
 
         elif mode == "Players" and is_goalie_mode:

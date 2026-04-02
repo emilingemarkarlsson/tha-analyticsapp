@@ -8,10 +8,12 @@ from lib.db import query_fresh
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 from lib import userdb
+from lib.entitlements import gate, soft_gate, has_feature, watchlist_slots_remaining
 
 st.set_page_config(page_title="Watchlist – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
-require_login()
+user = require_login()
+_uid = (user or {}).get("id", "")
 
 st.markdown(
     "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>My Hockey Room</h1>"
@@ -25,7 +27,12 @@ tab_watch, tab_roster = st.tabs(["Watchlist", "Roster Builder"])
 # TAB 1 – WATCHLIST
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_watch:
-    watched = userdb.watchlist_all()
+    # Paywall gate
+    if not has_feature("watchlist"):
+        gate("watchlist", "Watchlist",
+             "Spåra valfria spelare och följ deras form i realtid. Ingår i Base-plan.")
+
+    watched = userdb.watchlist_all(_uid)
 
     if not watched:
         st.markdown(
@@ -76,7 +83,7 @@ with tab_watch:
                     (p["player_id"] for p in watched if p["player_name"] == remove_sel), None
                 )
                 if pid_to_remove and st.button("Remove", key="btn_wl_remove"):
-                    userdb.watchlist_remove(pid_to_remove)
+                    userdb.watchlist_remove(pid_to_remove, _uid)
                     st.rerun()
 
         # ── Player cards ──────────────────────────────────────────────────────
@@ -136,7 +143,7 @@ with tab_watch:
                         key=f"note_{pid}", label_visibility="collapsed",
                     )
                     if new_note != note:
-                        userdb.watchlist_note(pid, new_note)
+                        userdb.watchlist_note(pid, new_note, _uid)
 
                     # Find replacement
                     if st.button("Find replacement", key=f"replace_{pid}", use_container_width=True):
@@ -234,14 +241,14 @@ with tab_watch:
 # TAB 2 – ROSTER BUILDER
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_roster:
-    rosters = userdb.roster_list()
+    rosters = userdb.roster_list(_uid)
 
     # Create new roster
     with st.expander("Create new roster", expanded=not rosters):
         new_name = st.text_input("Roster name", placeholder="e.g. My Dream Team", key="new_roster_name")
         if st.button("Create roster", key="btn_create_roster"):
             if new_name.strip():
-                userdb.roster_create(new_name.strip())
+                userdb.roster_create(new_name.strip(), _uid)
                 st.session_state.pop("new_roster_name", None)
                 st.rerun()
             else:

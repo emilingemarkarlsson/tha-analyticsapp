@@ -70,7 +70,10 @@ _page_header("Deep Dive", "Players · Teams · Compare — click any row for ful
 _ss("t_mode",     "Players")   # Players | Teams | Compare
 _ss("t_sub",      "Skaters")   # Skaters | Goalies  (when mode=Players)
 _ss("t_tab",      "Overview")  # Overview | Career | Splits
-_ss("t_filter",   "All")
+_ss("t_filter",      "All")
+_ss("t_filter_geo",  "All")    # Conf/Division dropdown
+_ss("t_filter_type", "All")    # Player-type dropdown (skaters only)
+_ss("t_chart_range", "Season") # Chart time-window toggle
 _ss("t_id",       None)
 _ss("t_search",   "")
 _ss("t_sort",     "z")         # sort column for left list
@@ -471,10 +474,12 @@ with col_browse:
             if st.button(m, key=f"mode_{m}", use_container_width=True,
                          type="primary" if active else "secondary",
                          help=_mode_help[m]):
-                st.session_state.t_mode  = m
-                st.session_state.t_id    = None
-                st.session_state.t_filter= "All"
-                st.session_state.t_tab   = "Overview"
+                st.session_state.t_mode        = m
+                st.session_state.t_id          = None
+                st.session_state.t_filter      = "All"
+                st.session_state.t_filter_geo  = "All"
+                st.session_state.t_filter_type = "All"
+                st.session_state.t_tab         = "Overview"
                 st.rerun()
 
 with col_view:
@@ -679,6 +684,8 @@ if mode == "Compare":
 
     # Render comparison as colored table
     rows_html = ""
+    _cmp_a_leads = 0
+    _cmp_b_leads = 0
     for stat_label, va, vb, col in cmp_stats:
         lower_better = stat_label in ("GAA", "L")
         try:
@@ -690,6 +697,8 @@ if mode == "Compare":
             else:
                 ca = col if fa >= fb else "#8896a8"
                 cb = col if fb > fa  else "#8896a8"
+            if ca != "#8896a8" and cb == "#8896a8": _cmp_a_leads += 1
+            elif cb != "#8896a8" and ca == "#8896a8": _cmp_b_leads += 1
         except Exception:
             ca = cb = col
         bold = "font-weight:700;" if stat_label in ("PTS","Sv%","Momentum","5g avg") else ""
@@ -704,6 +713,19 @@ if mode == "Compare":
             f'font-size:14px;{bold}padding-left:12px;">{vb}</div>'
             f'</div>'
         )
+    _cmp_total = _cmp_a_leads + _cmp_b_leads
+    _cmp_footer = (
+        f'<div style="display:grid;grid-template-columns:1fr 90px 1fr;padding:8px 0;'
+        f'margin-top:4px;border-top:1px solid rgba(255,255,255,0.08);">'
+        f'<div style="text-align:right;padding-right:12px;">'
+        f'<span style="color:{zca};font-weight:700;font-size:12px;">{_cmp_a_leads}</span>'
+        f'<span style="color:#8896a8;font-size:10px;"> stat{"s" if _cmp_a_leads != 1 else ""} won</span></div>'
+        f'<div style="text-align:center;color:#8896a8;font-size:9px;align-self:center;">of {_cmp_total}</div>'
+        f'<div style="text-align:left;padding-left:12px;">'
+        f'<span style="color:{zcb};font-weight:700;font-size:12px;">{_cmp_b_leads}</span>'
+        f'<span style="color:#8896a8;font-size:10px;"> stat{"s" if _cmp_b_leads != 1 else ""} won</span></div>'
+        f'</div>'
+    )
 
     # Header
     name_a = row_a["name"] if cmp_type != "Teams" else row_a["abbr"]
@@ -715,7 +737,8 @@ if mode == "Compare":
         f'<div></div>'
         f'<div style="text-align:left;color:{zcb};font-size:10px;font-weight:700;padding-left:12px;">{name_b}</div>'
         f'</div>'
-        f'<div style="margin-bottom:14px;">{rows_html}</div>'
+        f'<div style="margin-bottom:8px;">{rows_html}</div>'
+        f'{_cmp_footer}'
     )
 
     # ── Overlaid form chart (skaters/goalies) ───────────────────────────────────
@@ -791,9 +814,11 @@ if mode == "Players":
                 active = st.session_state.t_sub == s
                 if st.button(s, key=f"sub_{s}", use_container_width=True,
                              type="primary" if active else "secondary"):
-                    st.session_state.t_sub   = s
-                    st.session_state.t_id    = None
-                    st.session_state.t_filter= "All"
+                    st.session_state.t_sub        = s
+                    st.session_state.t_id         = None
+                    st.session_state.t_filter     = "All"
+                    st.session_state.t_filter_geo  = "All"
+                    st.session_state.t_filter_type = "All"
                     st.rerun()
     with sc_right:
         st.session_state.t_search = st.text_input(
@@ -815,50 +840,66 @@ else:
 
 st.markdown("<div style='height:2px;'></div>", unsafe_allow_html=True)
 
-# Filter chips
-if mode == "Players" and st.session_state.t_sub == "Skaters":
-    filters = ["All","East","West","ATL","MET","CEN","PAC","Fwd","Def","Hot","Cold"]
-elif mode == "Players":
-    filters = ["All","East","West","ATL","MET","CEN","PAC"]
-else:
-    filters = ["All","East","West","ATL","MET","CEN","PAC"]
+# Filter dropdowns — Conf/Div + Player-type (skaters only)
+_GEO_OPTS  = ["All","East","West","ATL","MET","CEN","PAC"]
+_TYPE_OPTS = ["All","Fwd","Def","Hot","Cold"]
+_GEO_LABELS  = {"All":"All teams","East":"East Conf","West":"West Conf",
+                "ATL":"Atlantic","MET":"Metropolitan","CEN":"Central","PAC":"Pacific"}
+_TYPE_LABELS = {"All":"All positions","Fwd":"Forwards","Def":"Defenders",
+                "Hot":"Hot (σ ≥ 0.8)","Cold":"Cold (σ ≤ −0.8)"}
+_show_type_flt = (mode == "Players" and st.session_state.t_sub == "Skaters")
 
-flt_cols = st.columns(len(filters))
-for i, f in enumerate(filters):
-    with flt_cols[i]:
-        active = st.session_state.t_filter == f
-        if st.button(f, key=f"chip_{mode}_{f}", use_container_width=True,
-                     type="primary" if active else "secondary"):
-            st.session_state.t_filter = f
+_fd1, _fd2, _fd3 = st.columns([3, 3, 2])
+with _fd1:
+    _new_geo = st.selectbox(
+        "Conf/Division", _GEO_OPTS,
+        index=_GEO_OPTS.index(st.session_state.t_filter_geo) if st.session_state.t_filter_geo in _GEO_OPTS else 0,
+        format_func=lambda x: _GEO_LABELS.get(x, x),
+        label_visibility="collapsed", key="t_filter_geo_sel",
+    )
+    if _new_geo != st.session_state.t_filter_geo:
+        st.session_state.t_filter_geo = _new_geo
+        st.rerun()
+if _show_type_flt:
+    with _fd2:
+        _new_type = st.selectbox(
+            "Player Type", _TYPE_OPTS,
+            index=_TYPE_OPTS.index(st.session_state.t_filter_type) if st.session_state.t_filter_type in _TYPE_OPTS else 0,
+            format_func=lambda x: _TYPE_LABELS.get(x, x),
+            label_visibility="collapsed", key="t_filter_type_sel",
+        )
+        if _new_type != st.session_state.t_filter_type:
+            st.session_state.t_filter_type = _new_type
             st.rerun()
 
 st.markdown("<div style='height:3px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:5px;'></div>",
             unsafe_allow_html=True)
 
-flt = st.session_state.t_filter
+_flt_geo  = st.session_state.t_filter_geo
+_flt_type = st.session_state.t_filter_type
 
 if mode == "Players":
     if st.session_state.t_sub == "Skaters":
         df_src = _skater_list()
-        if flt in DIV_TEAMS: df_src = df_src[df_src["team"].isin(DIV_TEAMS[flt])]
-        elif flt == "East":  df_src = df_src[df_src["team"].isin(EAST)]
-        elif flt == "West":  df_src = df_src[df_src["team"].isin(WEST)]
-        elif flt == "Fwd":   df_src = df_src[df_src["pos"].isin(["C","L","R"])]
-        elif flt == "Def":   df_src = df_src[df_src["pos"] == "D"]
-        elif flt == "Hot":   df_src = df_src[df_src["z"] >= 0.8]
-        elif flt == "Cold":  df_src = df_src[df_src["z"] <= -0.8]
+        if _flt_geo in DIV_TEAMS:   df_src = df_src[df_src["team"].isin(DIV_TEAMS[_flt_geo])]
+        elif _flt_geo == "East":    df_src = df_src[df_src["team"].isin(EAST)]
+        elif _flt_geo == "West":    df_src = df_src[df_src["team"].isin(WEST)]
+        if _flt_type == "Fwd":      df_src = df_src[df_src["pos"].isin(["C","L","R"])]
+        elif _flt_type == "Def":    df_src = df_src[df_src["pos"] == "D"]
+        elif _flt_type == "Hot":    df_src = df_src[df_src["z"] >= 0.8]
+        elif _flt_type == "Cold":   df_src = df_src[df_src["z"] <= -0.8]
     else:
         df_src = _goalie_list()
-        if flt in DIV_TEAMS: df_src = df_src[df_src["team"].isin(DIV_TEAMS[flt])]
-        elif flt == "East":  df_src = df_src[df_src["team"].isin(EAST)]
-        elif flt == "West":  df_src = df_src[df_src["team"].isin(WEST)]
+        if _flt_geo in DIV_TEAMS:   df_src = df_src[df_src["team"].isin(DIV_TEAMS[_flt_geo])]
+        elif _flt_geo == "East":    df_src = df_src[df_src["team"].isin(EAST)]
+        elif _flt_geo == "West":    df_src = df_src[df_src["team"].isin(WEST)]
 else:
     df_src = _team_list()
-    if flt == "East":       df_src = df_src[df_src["conf"] == "E"]
-    elif flt == "West":     df_src = df_src[df_src["conf"] == "W"]
-    elif flt in DIV_TEAMS:
+    if _flt_geo == "East":          df_src = df_src[df_src["conf"] == "E"]
+    elif _flt_geo == "West":        df_src = df_src[df_src["conf"] == "W"]
+    elif _flt_geo in DIV_TEAMS:
         _dmap = {"ATL":"A","MET":"M","CEN":"C","PAC":"P"}
-        df_src = df_src[df_src["div"] == _dmap[flt]]
+        df_src = df_src[df_src["div"] == _dmap[_flt_geo]]
 
 if search:
     q = search.lower()
@@ -1063,9 +1104,25 @@ with col_center:
 
                 # ── OVERVIEW TAB ──────────────────────────────────────────────
                 if tab == "Overview":
+                    # Chart range toggle
+                    _cr_opts = ["L10", "L20", "L40", "Season"]
+                    _cr_cols = st.columns([1, 1, 1, 1, 4])
+                    for _ci, _cr_opt in enumerate(_cr_opts):
+                        with _cr_cols[_ci]:
+                            _cr_active = st.session_state.t_chart_range == _cr_opt
+                            if st.button(_cr_opt, key=f"cr_{_cr_opt}_{sel_id}", use_container_width=True,
+                                         type="primary" if _cr_active else "secondary"):
+                                st.session_state.t_chart_range = _cr_opt
+                                st.rerun()
+
                     df_form = _player_form_series(int(sel_id))
                     if not df_form.empty:
                         df_form = df_form.copy()
+                        # Apply window filter before computing rolling averages
+                        _cr_sel = st.session_state.t_chart_range
+                        if _cr_sel == "L10":    df_form = df_form.tail(10).reset_index(drop=True)
+                        elif _cr_sel == "L20":  df_form = df_form.tail(20).reset_index(drop=True)
+                        elif _cr_sel == "L40":  df_form = df_form.tail(40).reset_index(drop=True)
                         df_form["roll5"]  = df_form["pts"].rolling(5, min_periods=2).mean()
                         df_form["roll10"] = df_form["pts"].rolling(10, min_periods=5).mean()
                         season_avg = df_form["pts"].mean()
@@ -1593,6 +1650,31 @@ with col_right:
                 insight = _ai_insight(row["name"], row["team"])
                 thesis_text, thesis_color = _quick_thesis(float(row["z"]), int(row["gp"]))
 
+                # Traffic light signals
+                _tl_form   = "#5a8f4e" if float(row["z"]) >= 0.8 else ("#8896a8" if float(row["z"]) > -0.8 else "#87ceeb")
+                _tl_toi    = ("#5a8f4e" if (pd.notna(row["toi"]) and float(row["toi"]) >= 18)
+                               else ("#f97316" if (pd.notna(row["toi"]) and float(row["toi"]) >= 14)
+                               else "#8896a8"))
+                _sh_f      = float(row["sh_pct"]) if pd.notna(row["sh_pct"]) else None
+                _tl_sh     = ("#f97316" if (_sh_f is not None and _sh_f >= 16)
+                               else ("#5a8f4e" if (_sh_f is not None and _sh_f >= 8)
+                               else "#8896a8"))
+                _tl_sample = "#5a8f4e" if int(row["gp"]) >= 30 else ("#f97316" if int(row["gp"]) >= 15 else "#c41e3a")
+                _tl_sh_warn = f" ⚠ {_sh_f:.0f}%" if (_sh_f is not None and _sh_f >= 16) else ""
+                _traffic_html = (
+                    f'<div style="display:grid;grid-template-columns:14px 1fr 14px 1fr;'
+                    f'gap:3px 6px;margin-bottom:8px;align-items:center;">'
+                    f'<span style="width:8px;height:8px;border-radius:50%;background:{_tl_form};display:inline-block;"></span>'
+                    f'<span style="color:#8896a8;font-size:9px;">Form</span>'
+                    f'<span style="width:8px;height:8px;border-radius:50%;background:{_tl_toi};display:inline-block;"></span>'
+                    f'<span style="color:#8896a8;font-size:9px;">Ice time</span>'
+                    f'<span style="width:8px;height:8px;border-radius:50%;background:{_tl_sh};display:inline-block;"></span>'
+                    f'<span style="color:#8896a8;font-size:9px;">SH%{_tl_sh_warn}</span>'
+                    f'<span style="width:8px;height:8px;border-radius:50%;background:{_tl_sample};display:inline-block;"></span>'
+                    f'<span style="color:#8896a8;font-size:9px;">Sample</span>'
+                    f'</div>'
+                )
+
                 st.html(f"""
                 <div style="border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px;">
                   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -1610,6 +1692,7 @@ with col_right:
                               border-radius:4px;padding:5px 8px;margin-bottom:8px;text-align:center;">
                     <span style="color:{thesis_color};font-size:10px;font-weight:600;">{thesis_text}</span>
                   </div>
+                  {_traffic_html}
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px;">
                     {_stat_block('PTS',  int(row['pts']),                  '#5a8f4e', 15)}
                     {_stat_block('+/-',  pm_s,                             pm_c,      15)}

@@ -100,10 +100,18 @@ try:
           AND player_last_name IS NOT NULL
         ORDER BY pts_zscore_5v20 ASC LIMIT 5
     """)
+    df_team_form = query("""
+        SELECT team_abbr, ROUND(pts_zscore_5v20, 2) AS z,
+               CAST(wins_last_5 AS INTEGER) AS wins_last_5
+        FROM team_rolling_stats
+        WHERE game_recency_rank = 1
+          AND season = (SELECT MAX(season) FROM games WHERE game_type = '2')
+        ORDER BY pts_zscore_5v20 DESC
+    """)
     db_ok = True
 except Exception as e:
     st.error(f"Database error: {e}")
-    df_insights = df_hot = df_cold = None
+    df_insights = df_hot = df_cold = df_team_form = None
     db_ok = False
 
 if db_ok:
@@ -294,6 +302,52 @@ if db_ok:
             </div>""",
             unsafe_allow_html=True,
         )
+
+        # League Form mini table
+        if df_team_form is not None and not df_team_form.empty:
+            st.markdown(
+                """<div style="background:rgba(90,143,78,0.04);border:1px solid rgba(90,143,78,0.15);
+                               border-radius:5px 5px 0 0;padding:8px 14px;margin-top:12px;">
+                     <span style="color:#5a8f4e;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">League Form</span>
+                   </div>""",
+                unsafe_allow_html=True,
+            )
+            rows_top = ""
+            for _, t in df_team_form.head(3).iterrows():
+                z = float(t["z"])
+                z_color = "#f97316" if z >= 0.8 else "#5a8f4e"
+                z_str = f"+{z:.2f}σ"
+                rows_top += (
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                    f'padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                    f'<div style="display:flex;align-items:center;gap:8px;">'
+                    f'<span style="color:#fff;font-size:12px;font-weight:700;font-family:monospace;">{t["team_abbr"]}</span>'
+                    f'<span style="color:#8896a8;font-size:10px;">W{int(t["wins_last_5"])}/5</span>'
+                    f'</div>'
+                    f'<span style="color:{z_color};font-family:monospace;font-size:12px;font-weight:700;">{z_str}</span>'
+                    f'</div>'
+                )
+            sep = '<div style="padding:4px 14px;background:rgba(255,255,255,0.02);"><span style="color:rgba(255,255,255,0.15);font-size:10px;">· · ·</span></div>'
+            rows_bot = ""
+            for _, t in df_team_form.tail(3).iloc[::-1].iterrows():
+                z = float(t["z"])
+                z_color = "#87ceeb" if z < -0.8 else "#8896a8"
+                z_str = f"{z:.2f}σ"
+                rows_bot += (
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                    f'padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                    f'<div style="display:flex;align-items:center;gap:8px;">'
+                    f'<span style="color:#fff;font-size:12px;font-weight:700;font-family:monospace;">{t["team_abbr"]}</span>'
+                    f'<span style="color:#8896a8;font-size:10px;">W{int(t["wins_last_5"])}/5</span>'
+                    f'</div>'
+                    f'<span style="color:{z_color};font-family:monospace;font-size:12px;font-weight:700;">{z_str}</span>'
+                    f'</div>'
+                )
+            st.markdown(
+                f'<div style="border:1px solid rgba(90,143,78,0.15);border-top:none;border-radius:0 0 5px 5px;overflow:hidden;margin-bottom:16px;">'
+                f'{rows_top}{sep}{rows_bot}</div>',
+                unsafe_allow_html=True,
+            )
 
 data_source_footer()
 zscore_legend()

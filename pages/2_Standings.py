@@ -96,23 +96,26 @@ def _division_html(div_df: pd.DataFrame, div: str, conf_label: str) -> str:
         pk_val  = float(row["PK"]) if row["PK"] else 0.0
         pp_color = "#f97316" if pp_val >= 25 else ("#5a8f4e" if pp_val >= 20 else "#8896a8")
         pk_color = "#f97316" if pk_val >= 83 else ("#5a8f4e" if pk_val >= 78 else "#8896a8")
+        streak_val = str(row["STREAK"])
+        streak_char = streak_val[0] if streak_val else ""
+        streak_color = "#5a8f4e" if streak_char == "W" else ("#87ceeb" if streak_char == "O" else "#c41e3a" if streak_char == "L" else "#8896a8")
         bg = "rgba(255,255,255,0.02)" if idx % 2 == 0 else "transparent"
         rows_html += (
             f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);background:{bg};">'
-            f'<td style="padding:8px 14px;white-space:nowrap;">'
+            f'<td style="padding:6px 14px;white-space:nowrap;">'
             f'<span style="color:rgba(255,255,255,0.2);font-size:11px;margin-right:4px;">{idx+1}</span>'
             f'{badge}'
             f'<span style="color:#fff;font-weight:600;font-size:12px;">{row["teamAbbrev"]}</span>'
             f'</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:#8896a8;font-size:12px;">{int(row["gamesPlayed"])}</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:#fff;font-weight:600;font-size:12px;">{int(row["wins"])}</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:#8896a8;font-size:12px;">{int(row["losses"])}</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:#8896a8;font-size:12px;">{int(row["otLosses"])}</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:#5a8f4e;font-weight:700;font-size:12px;">{int(row["points"])}</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:{diff_color};font-family:monospace;font-size:11px;">{diff_str}</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:{pp_color};font-family:monospace;font-size:11px;">{pp_val:.1f}%</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:{pk_color};font-family:monospace;font-size:11px;">{pk_val:.1f}%</td>'
-            f'<td style="text-align:center;padding:8px 6px;color:#8896a8;font-family:monospace;font-size:11px;">{row["STREAK"]}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:#8896a8;font-size:12px;">{int(row["gamesPlayed"])}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:#fff;font-weight:600;font-size:12px;">{int(row["wins"])}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:#8896a8;font-size:12px;">{int(row["losses"])}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:#8896a8;font-size:12px;">{int(row["otLosses"])}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:#5a8f4e;font-weight:700;font-size:12px;">{int(row["points"])}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:{diff_color};font-family:monospace;font-size:11px;font-weight:700;">{diff_str}</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:{pp_color};font-family:monospace;font-size:11px;">{pp_val:.1f}%</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:{pk_color};font-family:monospace;font-size:11px;">{pk_val:.1f}%</td>'
+            f'<td style="text-align:center;padding:6px 6px;color:{streak_color};font-family:monospace;font-size:11px;font-weight:700;">{streak_val}</td>'
             f'</tr>'
         )
     return (

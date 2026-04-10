@@ -274,4 +274,74 @@ with col_insights:
                 unsafe_allow_html=True,
             )
 
+# ── Team Comparison ───────────────────────────────────────────────────────────
+st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='font-size:10px;font-weight:700;text-transform:uppercase;"
+    "letter-spacing:0.08em;color:#8896a8;margin-bottom:8px;'>Compare with other teams · cumulative points this season</p>",
+    unsafe_allow_html=True,
+)
+compare_options = [t for t in ALL_TEAMS if t != team]
+compare_sel = st.multiselect(
+    "", compare_options, max_selections=3,
+    placeholder="Add up to 3 teams to compare...",
+    label_visibility="collapsed", key="cmp_teams",
+)
+all_cmp = [team] + (compare_sel or [])
+cmp_in = "','".join(all_cmp)
+try:
+    df_cmp = query_fresh(f"""
+        SELECT
+            team_abbr,
+            game_date,
+            SUM(TRY_CAST(team_points AS DOUBLE)) OVER (
+                PARTITION BY team_abbr ORDER BY game_date
+                ROWS UNBOUNDED PRECEDING
+            ) AS cum_pts,
+            ROW_NUMBER() OVER (PARTITION BY team_abbr ORDER BY game_date) AS game_num
+        FROM team_game_stats
+        WHERE team_abbr IN ('{cmp_in}')
+          AND game_type = '2'
+          AND season = (SELECT MAX(season) FROM games WHERE game_type = '2')
+        ORDER BY team_abbr, game_date
+    """)
+except Exception:
+    df_cmp = pd.DataFrame()
+
+if not df_cmp.empty:
+    CMP_COLORS = ["#5a8f4e", "#f97316", "#87ceeb", "#c41e3a"]
+    fig_cmp = go.Figure()
+    for i, t in enumerate(all_cmp):
+        t_df = df_cmp[df_cmp["team_abbr"] == t].sort_values("game_num")
+        if t_df.empty:
+            continue
+        color = CMP_COLORS[i % len(CMP_COLORS)]
+        last = t_df.iloc[-1]
+        fig_cmp.add_trace(go.Scatter(
+            x=t_df["game_num"],
+            y=t_df["cum_pts"],
+            mode="lines",
+            name=t,
+            line=dict(color=color, width=2.5 if i == 0 else 1.8),
+            opacity=1.0 if i == 0 else 0.85,
+        ))
+        fig_cmp.add_annotation(
+            x=float(last["game_num"]) + 0.5,
+            y=float(last["cum_pts"]),
+            text=f"<b>{t}</b>  {int(last['cum_pts'])}",
+            showarrow=False, xanchor="left",
+            font=dict(size=9, color=color),
+        )
+    fig_cmp.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#8896a8", font_size=11,
+        margin=dict(l=0, r=90, t=10, b=30),
+        height=220,
+        showlegend=False,
+        xaxis=dict(title="Game #", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
+        yaxis=dict(title="Cumulative Points", gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
+    )
+    st.plotly_chart(fig_cmp, use_container_width=True, config={"displayModeBar": False})
+
 data_source_footer('Form (σ) = last 5 games vs 20-game baseline · pts_zscore_5v20')

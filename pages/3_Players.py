@@ -7,7 +7,7 @@ import pandas as pd
 from lib.db import query, get_data_date
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
-from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html
+from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html, perf_tier
 
 st.set_page_config(page_title="Players – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
@@ -73,17 +73,51 @@ st.markdown(
 rows_html = ""
 for idx, row in filtered.iterrows():
     z = float(row["pts_zscore_5v20"])
-    rows_html += f"""
-    <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
-      <td style="padding:8px 14px;color:#fff;font-weight:500;font-size:12px;">{row['name']}</td>
-      <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:12px;">{row['team_abbr']}</td>
-      <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:12px;">{int(row['gp_season'])}</td>
-      <td style="text-align:center;padding:8px 8px;color:#fff;font-size:12px;">{int(row['goals_season'])}</td>
-      <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:12px;">{int(row['assists_season'])}</td>
-      <td style="text-align:center;padding:8px 8px;color:#fff;font-weight:500;font-size:12px;">{float(row['pts_avg_5g']):.2f}</td>
-      <td style="text-align:center;padding:8px 8px;color:#8896a8;font-size:12px;">{float(row['pts_avg_20g']):.2f}</td>
-      <td style="text-align:center;padding:8px 8px;">{tier_badge_html(z)}</td>
-    </tr>"""
+    # Row background tint based on z-score intensity
+    if z >= 1.5:
+        row_bg = "rgba(249,115,22,0.07)"
+    elif z >= 0.8:
+        row_bg = "rgba(249,115,22,0.04)"
+    elif z <= -1.5:
+        row_bg = "rgba(135,206,235,0.07)"
+    elif z <= -0.8:
+        row_bg = "rgba(135,206,235,0.04)"
+    else:
+        row_bg = "transparent"
+    # Momentum visual cell
+    tier_label, tier_color = perf_tier(z)
+    z_str = f"{z:+.2f}σ"
+    bar_pct = min(abs(z) / 3.0 * 50, 50)
+    if z >= 0:
+        bar_html = (f'<div style="position:absolute;left:50%;width:{bar_pct:.0f}%;'
+                    f'height:100%;background:{tier_color};border-radius:0 2px 2px 0;"></div>')
+    else:
+        bar_html = (f'<div style="position:absolute;right:50%;width:{bar_pct:.0f}%;'
+                    f'height:100%;background:{tier_color};border-radius:2px 0 0 2px;"></div>')
+    momentum_cell = (
+        f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:2px 8px;">'
+        f'<span style="color:{tier_color};font-family:monospace;font-size:12px;font-weight:700;">{z_str}</span>'
+        f'<div style="width:56px;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;'
+        f'overflow:hidden;position:relative;">{bar_html}</div>'
+        f'<span style="background:{tier_color}18;border:1px solid {tier_color}44;color:{tier_color};'
+        f'padding:1px 5px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:0.04em;'
+        f'white-space:nowrap;">{tier_label}</span>'
+        f'</div>'
+    )
+    goals = int(row["goals_season"])
+    goals_color = "#f97316" if goals >= 30 else ("#5a8f4e" if goals >= 15 else "#fff" if goals >= 5 else "#8896a8")
+    rows_html += (
+        f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);background:{row_bg};">'
+        f'<td style="padding:7px 14px;color:#fff;font-weight:500;font-size:12px;">{row["name"]}</td>'
+        f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:11px;font-family:monospace;">{row["team_abbr"]}</td>'
+        f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:12px;">{int(row["gp_season"])}</td>'
+        f'<td style="text-align:center;padding:7px 8px;color:{goals_color};font-size:12px;font-weight:{"600" if goals >= 15 else "400"};">{goals}</td>'
+        f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:12px;">{int(row["assists_season"])}</td>'
+        f'<td style="text-align:center;padding:7px 8px;color:#fff;font-weight:500;font-size:12px;">{float(row["pts_avg_5g"]):.2f}</td>'
+        f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:12px;">{float(row["pts_avg_20g"]):.2f}</td>'
+        f'<td style="text-align:center;padding:4px 8px;">{momentum_cell}</td>'
+        f'</tr>'
+    )
 
 st.markdown(
     f"""<div style="border:1px solid rgba(255,255,255,0.08);border-radius:5px;overflow:hidden;">

@@ -8,7 +8,6 @@ from lib.db import query_fresh
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 from lib import userdb
-from lib.entitlements import gate, soft_gate, has_feature, watchlist_slots_remaining
 
 st.set_page_config(page_title="Watchlist – THA Analytics", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
@@ -27,11 +26,6 @@ tab_watch, tab_roster = st.tabs(["Watchlist", "Roster Builder"])
 # TAB 1 – WATCHLIST
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_watch:
-    # Paywall gate
-    if not has_feature("watchlist"):
-        gate("watchlist", "Watchlist",
-             "Spåra valfria spelare och följ deras form i realtid. Ingår i Base-plan.")
-
     watched = userdb.watchlist_all(_uid)
 
     if not watched:

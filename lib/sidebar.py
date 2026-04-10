@@ -109,9 +109,9 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
-    # ── Favicon (SVG THA green box) ───────────────────────────────────────────
+    # ── Favicon (SVG THA orange box) ───────────────────────────────────────────
     st.markdown(
-        """<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='5' fill='%235a8f4e'/%3E%3Ctext x='3' y='22' font-family='Arial,sans-serif' font-size='13' font-weight='900' fill='white'%3ETHA%3C/text%3E%3C/svg%3E">""",
+        """<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='4' fill='%23f97316'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='13' font-weight='900' fill='white' text-anchor='middle'%3ETHA%3C/text%3E%3C/svg%3E">""",
         unsafe_allow_html=True,
     )
 
@@ -137,41 +137,25 @@ def render() -> None:
             unsafe_allow_html=True,
         )
 
-        # ── Nav group: Explore ─────────────────────────────────────────────────
+        # ── Nav group: Analytics ───────────────────────────────────────────────
         st.markdown(
             "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
             "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
-            "margin-bottom:2px;'>Explore</p>",
+            "margin-bottom:2px;'>Analytics</p>",
             unsafe_allow_html=True,
         )
-        st.page_link("app.py",                    label="Intelligence Feed", icon=":material/trending_up:")
-        st.page_link("pages/5_Chat.py",           label="Ask AI",            icon=":material/chat:")
-        st.page_link("pages/2_Standings.py",      label="Standings",         icon=":material/leaderboard:")
-        st.page_link("pages/3_Players.py",        label="Players",           icon=":material/person:")
-        st.page_link("pages/4_Teams.py",          label="Teams",             icon=":material/shield:")
-        st.page_link("pages/11_Goalies.py",       label="Goalies",           icon=":material/sports:")
-        st.page_link("pages/12_Playoffs.py",      label="Playoffs",          icon=":material/emoji_events:")
+        st.page_link("app.py",               label="Intelligence Feed", icon=":material/trending_up:")
+        st.page_link("pages/1_Deep_Dive.py", label="Deep Dive",         icon=":material/analytics:")
+        st.page_link("pages/2_Standings.py", label="Standings",         icon=":material/leaderboard:")
 
-        # ── Nav group: Analyse ─────────────────────────────────────────────────
+        # ── Nav group: Tools ───────────────────────────────────────────────────
         st.markdown(
             "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
             "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
-            "margin:10px 0 2px;'>Analyse</p>",
+            "margin:10px 0 2px;'>Tools</p>",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/1_Deep_Dive.py",        label="Deep Dive",        icon=":material/analytics:")
-        st.page_link("pages/6_Screener.py",        label="Player Finder",    icon=":material/manage_search:")
-        st.page_link("pages/8_Player_History.py",  label="Player History",   icon=":material/show_chart:")
-        st.page_link("pages/9_Team_History.py",    label="Team History",     icon=":material/history:")
-
-        # ── Nav group: My Room ─────────────────────────────────────────────────
-        st.markdown(
-            "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
-            "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
-            "margin:10px 0 2px;'>My Room</p>",
-            unsafe_allow_html=True,
-        )
-        st.page_link("pages/7_Watchlist.py", label="My Hockey Room", icon=":material/folder_special:")
+        st.page_link("pages/5_Chat.py",      label="Ask AI",            icon=":material/chat:")
 
         # ── Nav group: Account ─────────────────────────────────────────────────
         st.markdown(

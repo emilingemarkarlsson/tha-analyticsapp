@@ -27,14 +27,18 @@ EXAMPLES = [
     "Which teams have the best home record this season?",
 ]
 
-# Example chips
+# Example chips – 2 rows (3 + 2)
 st.markdown("<p style='font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#8896a8;margin-bottom:8px;'>Try these</p>", unsafe_allow_html=True)
-cols = st.columns(len(EXAMPLES))
 clicked = None
+row1_cols = st.columns(3)
+row2_cols = st.columns(2)
 for i, ex in enumerate(EXAMPLES):
-    with cols[i]:
+    col_list = row1_cols if i < 3 else row2_cols
+    idx = i if i < 3 else i - 3
+    with col_list[idx]:
         if st.button(ex, key=f"ex_{i}", use_container_width=True):
             clicked = ex
+st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
 # Chat history
 if "messages" not in st.session_state:

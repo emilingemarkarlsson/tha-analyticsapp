@@ -64,7 +64,6 @@ div[data-testid="stTextInput"] input {
 </style>""", unsafe_allow_html=True)
 
 from lib.components import page_header as _page_header
-from lib.entitlements import gate, soft_gate, has_feature, watchlist_slots_remaining
 _page_header("Deep Dive", "Players · Teams · Compare — click any row for full stats", data_date=_header_date)
 
 # ── Session state ───────────────────────────────────────────────────────────────
@@ -113,6 +112,9 @@ def _skater_list() -> pd.DataFrame:
                CAST(pr.pts_season AS INTEGER)      AS pts,
                ROUND(pr.pts_avg_5g, 2)             AS avg5,
                ROUND(pr.pts_zscore_5v20, 2)        AS z,
+               ROUND(pr.goals_zscore_5v20, 2)      AS gz,
+               ROUND(pr.shots_avg_10g, 1)          AS shots10,
+               ROUND(pr.goals_avg_5g, 2)           AS gavg5,
                ss.plusMinus AS pm,
                ss.ppPoints  AS ppp,
                ROUND(ss.shootingPct*100,1)         AS sh_pct,
@@ -198,8 +200,9 @@ def _player_games(pid) -> pd.DataFrame:
 def _player_form_series(pid) -> pd.DataFrame:
     pfx = _season_pfx()
     return query_fresh(f"""
-        SELECT game_date AS date, points AS pts
-        FROM player_game_stats
+        SELECT game_date AS date, points AS pts, goals AS g,
+               shots AS shots, hits AS hits
+        FROM player_rolling_stats
         WHERE player_id={pid}
           AND CAST(game_id AS VARCHAR) LIKE '{pfx}'
         ORDER BY game_date
@@ -318,6 +321,60 @@ def _team_splits(abbr) -> pd.DataFrame:
             GROUP BY game_id
         ) b ON b.game_id = a.game_id
         GROUP BY a.is_home
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _player_edge(pid) -> dict:
+    """Edge NHL tracking stats for a player (current season)."""
+    df = query_fresh(f"""
+        SELECT category,
+               value_shotSpeed_metric    AS shot_speed,
+               value_skatingSpeed_metric AS skate_speed,
+               value_distanceSkated_metric AS dist,
+               value_sog                 AS sog,
+               value_zoneTime            AS zone_time
+        FROM edge_skaters
+        WHERE player_id={pid} AND season=20252026
+    """)
+    return {row["category"]: row for _, row in df.iterrows()}
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _player_games_full(pid) -> pd.DataFrame:
+    """Full game log with shots, hits, +/-, blocked shots."""
+    pfx = _season_pfx()
+    return query_fresh(f"""
+        SELECT pgs.game_date AS date,
+               opp.team_abbr AS opp,
+               CASE WHEN pgs.is_home THEN 'vs' ELSE '@' END AS ha,
+               pgs.goals AS G, pgs.assists AS A, pgs.points AS PTS,
+               CAST(pgs.shots AS INTEGER) AS S,
+               COALESCE(CAST(pgs.hits AS INTEGER), 0) AS H,
+               COALESCE(pgs.plus_minus, 0) AS PM,
+               COALESCE(CAST(pgs.blocked_shots AS INTEGER), 0) AS BLK,
+               ROUND(pgs.toi_seconds/60.0,1) AS TOI
+        FROM player_game_stats pgs
+        LEFT JOIN (SELECT game_id, team_abbr FROM team_game_stats
+                   WHERE CAST(game_id AS VARCHAR) LIKE '{pfx}') opp
+               ON opp.game_id=pgs.game_id AND opp.team_abbr != pgs.team_abbr
+        WHERE pgs.player_id={pid}
+          AND CAST(pgs.game_id AS VARCHAR) LIKE '{pfx}'
+          AND pgs.position != 'G'
+        ORDER BY pgs.game_date DESC LIMIT 25
+    """)
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _team_rolling_series(abbr) -> pd.DataFrame:
+    """Time series of team rolling stats for SOG, hits, wins_last_5."""
+    pfx = _season_pfx()
+    return query_fresh(f"""
+        SELECT game_date, goals_for AS gf, goals_against AS ga,
+               sog, hits, blocked_shots,
+               gf_avg_10g, sog_avg_10g,
+               wins_last_5, losses_last_5
+        FROM team_rolling_stats
+        WHERE team_abbr='{abbr}'
+          AND CAST(game_id AS VARCHAR) LIKE '{pfx}'
+        ORDER BY game_date
     """)
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -457,6 +514,7 @@ _tab_help = {
     "Overview": "Current season form, recent games and chart",
     "Career":   "Career arc and season-by-season stats",
     "Splits":   "Home vs away and situational breakdown",
+    "Advanced": "Edge tracking stats, shot rates, and full game log",
 }
 
 # Row 1 – what to browse + view (side by side)
@@ -491,8 +549,8 @@ with col_view:
             "How to view selected</p>",
             unsafe_allow_html=True,
         )
-        tc = st.columns(3)
-        for i, t in enumerate(["Overview", "Career", "Splits"]):
+        tc = st.columns(4)
+        for i, t in enumerate(["Overview", "Career", "Splits", "Advanced"]):
             with tc[i]:
                 active = st.session_state.t_tab == t
                 if st.button(t, key=f"tab_{t}", use_container_width=True,
@@ -503,9 +561,9 @@ with col_view:
 
 # Compact tip strip below the buttons
 _tip_lines = {
-    "Players": "① Pick Skaters or Goalies &nbsp;·&nbsp; ② Filter by conf/division/form &nbsp;·&nbsp; ③ Click a row to see full stats →",
-    "Teams":   "① Filter by conference or division &nbsp;·&nbsp; ② Click a row to see team stats →",
-    "Compare": "① Pick Skaters / Goalies / Teams &nbsp;·&nbsp; ② Choose Entity A and B &nbsp;·&nbsp; ③ Stats appear side by side →",
+    "Players": "Filter by conf / division / form type &nbsp;·&nbsp; Click any row for full stats",
+    "Teams":   "Filter by conference or division &nbsp;·&nbsp; Click any row for team details",
+    "Compare": "Select Entity A &amp; B to compare stats and form side by side",
 }
 tip = _tip_lines.get(st.session_state.t_mode, "")
 st.markdown(
@@ -828,6 +886,34 @@ if mode == "Players":
             value=st.session_state.t_search,
             key="t_search_input",
         )
+
+    # ── Screener presets (skaters only) ──────────────────────────────────────
+    if st.session_state.t_sub == "Skaters":
+        _PRESETS = {
+            "Hot Streak":  {"t_filter_type": "Hot",  "t_sort": "z"},
+            "Breakout":    {"t_filter_type": "Hot",  "t_sort": "avg5"},
+            "Cold Spell":  {"t_filter_type": "Cold", "t_sort": "z"},
+            "PPG+":        {"t_filter_type": "All",  "t_sort": "avg5"},
+            "Shutdown D":  {"t_filter_type": "Def",  "t_sort": "z"},
+            "Reset":       {"t_filter_type": "All",  "t_sort": "z"},
+        }
+        _active_preset = st.session_state.get("t_preset", None)
+        _pr_cols = st.columns(len(_PRESETS))
+        for _pi, (_pl, _pc) in enumerate(_PRESETS.items()):
+            with _pr_cols[_pi]:
+                _is_active = _active_preset == _pl
+                if st.button(
+                    _pl, key=f"preset_{_pl}", use_container_width=True,
+                    type="primary" if _is_active else "secondary",
+                ):
+                    if _pl == "Reset":
+                        st.session_state["t_preset"] = None
+                    else:
+                        st.session_state["t_preset"] = _pl
+                    for _k, _v in _pc.items():
+                        st.session_state[_k] = _v
+                    st.session_state.t_id = None
+                    st.rerun()
 else:
     # Teams mode – search on its own
     _, search_col = st.columns([3, 5])
@@ -915,7 +1001,7 @@ if search:
 df_src = df_src.reset_index(drop=True)
 
 # ── Sort left list ───────────────────────────────────────────────────────────
-_SORT_OPTS_SKATER = {"z": "Momentum", "pts": "PTS", "avg5": "5g avg", "gp": "GP"}
+_SORT_OPTS_SKATER = {"z": "Momentum", "gz": "Goals σ", "pts": "PTS", "avg5": "5g avg", "shots10": "Shots/10g", "gp": "GP"}
 _SORT_OPTS_GOALIE = {"z": "Momentum", "sv_pct": "Sv%", "gp": "GP"}
 _SORT_OPTS_TEAM   = {"z": "Momentum", "pts": "PTS"}
 
@@ -937,7 +1023,7 @@ if st.session_state.t_id is None and not df_src.empty:
 # ══════════════════════════════════════════════════════════════════════════════
 #  3-PANEL LAYOUT
 # ══════════════════════════════════════════════════════════════════════════════
-col_left, col_center, col_right = st.columns([1.7, 3.7, 1.6], gap="small")
+col_left, col_center, col_right = st.columns([2.1, 3.3, 1.6], gap="small")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  LEFT PANEL
@@ -970,30 +1056,46 @@ with col_left:
     _sort_col_now = st.session_state.t_sort
     _sort_col_label = _sort_opts_now.get(_sort_col_now, _sort_col_now)
 
+    def _abbrev_name(full: str) -> str:
+        """'Mike Matheson' → 'M. Matheson'  to save horizontal space."""
+        parts = full.strip().split()
+        if len(parts) >= 2:
+            return parts[0][0] + ". " + " ".join(parts[1:])
+        return full
+
+    _metric_cfg = (
+        st.column_config.ProgressColumn(_sort_col_label, min_value=-3.0, max_value=3.0, format="%.2f", width="small")
+        if _sort_col_now == "z" else
+        st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f")
+    )
+
     if mode == "Players" and not is_goalie_mode:
-        df_disp = df_src[["name","team", _sort_col_now]].copy()
-        df_disp["_name"] = df_disp["name"] + "  ·  " + df_disp["team"]
-        df_disp = df_disp[["_name", _sort_col_now]].copy()
-        df_disp.columns = ["Player", _sort_col_label]
+        df_disp = df_src[["name", "team", _sort_col_now]].copy()
+        df_disp["_name"] = df_disp["name"].apply(_abbrev_name)
+        df_disp = df_disp[["_name", "team", _sort_col_now]].copy()
+        df_disp.columns = ["Player", "Team", _sort_col_label]
         col_cfg = {
-            "Player":         st.column_config.TextColumn("Player", width="medium"),
-            _sort_col_label:  st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f"),
+            "Player": st.column_config.TextColumn("Player", width="small"),
+            "Team":   st.column_config.TextColumn("Team",   width="small"),
+            _sort_col_label: _metric_cfg,
         }
     elif is_goalie_mode:
-        df_disp = df_src[["name","team", _sort_col_now]].copy()
-        df_disp["_name"] = df_disp["name"] + "  ·  " + df_disp["team"]
-        df_disp = df_disp[["_name", _sort_col_now]].copy()
-        df_disp.columns = ["Goalie", _sort_col_label]
+        df_disp = df_src[["name", "team", _sort_col_now]].copy()
+        df_disp["_name"] = df_disp["name"].apply(_abbrev_name)
+        df_disp = df_disp[["_name", "team", _sort_col_now]].copy()
+        df_disp.columns = ["Goalie", "Team", _sort_col_label]
         col_cfg = {
-            "Goalie":         st.column_config.TextColumn("Goalie", width="medium"),
-            _sort_col_label:  st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f"),
+            "Goalie": st.column_config.TextColumn("Goalie", width="small"),
+            "Team":   st.column_config.TextColumn("Team",   width="small"),
+            _sort_col_label: _metric_cfg,
         }
     else:
-        df_disp = df_src[["abbr", _sort_col_now]].copy()
-        df_disp.columns = ["Team", _sort_col_label]
+        df_disp = df_src[["abbr", "div", _sort_col_now]].copy()
+        df_disp.columns = ["Team", "Div", _sort_col_label]
         col_cfg = {
-            "Team":           st.column_config.TextColumn("Team", width="medium"),
-            _sort_col_label:  st.column_config.NumberColumn(_sort_col_label, width="small", format="%.2f"),
+            "Team": st.column_config.TextColumn("Team", width="small"),
+            "Div":  st.column_config.TextColumn("Div",  width="small"),
+            _sort_col_label: _metric_cfg,
         }
 
     _sigma_col = _sort_col_label if _sort_col_label in df_disp.columns else None
@@ -1153,6 +1255,33 @@ with col_center:
                                       annotation_text=f"avg {season_avg:.2f}",
                                       annotation_font_size=8,
                                       annotation_font_color="rgba(255,255,255,0.3)")
+                        # End-labels on rolling avg lines (Koyfin style)
+                        _r5_valid = df_form.dropna(subset=["roll5"])
+                        if not _r5_valid.empty:
+                            fig.add_annotation(
+                                x=str(_r5_valid["date"].iloc[-1])[:10],
+                                y=float(_r5_valid["roll5"].iloc[-1]),
+                                text=f"  {float(_r5_valid['roll5'].iloc[-1]):.2f}",
+                                showarrow=False, xanchor="left",
+                                font=dict(size=8, color="#f97316"),
+                            )
+                        _r10_valid = df_form.dropna(subset=["roll10"])
+                        if not _r10_valid.empty:
+                            fig.add_annotation(
+                                x=str(_r10_valid["date"].iloc[-1])[:10],
+                                y=float(_r10_valid["roll10"].iloc[-1]),
+                                text=f"  {float(_r10_valid['roll10'].iloc[-1]):.2f}",
+                                showarrow=False, xanchor="left",
+                                font=dict(size=8, color="#87ceeb"),
+                            )
+                        # Goals 5g rolling avg line
+                        if "g" in df_form.columns:
+                            df_form["goals_avg5"] = df_form["g"].rolling(5, min_periods=2).mean()
+                            fig.add_scatter(
+                                x=df_form["date"].astype(str).str[:10], y=df_form["goals_avg5"],
+                                mode="lines", line=dict(color="#5a8f4e", width=1.5, dash="dash"),
+                                name="Goals 5g", hovertemplate="%{x}: %{y:.2f}<extra></extra>",
+                            )
                         layout = dict(**CHART_BASE)
                         layout["height"] = 220
                         layout["legend"] = dict(orientation="h", y=1.08, font=dict(size=9))
@@ -1204,8 +1333,6 @@ with col_center:
 
                 # ── CAREER TAB ────────────────────────────────────────────────
                 elif tab == "Career":
-                    gate("deep_dive_career", "Career & Splits",
-                         "Karriärdata för alla 16 säsonger tillgängligt på Base-plan.")
                     df_car = _player_career(int(sel_id))
                     if not df_car.empty:
                         fig_arc = go.Figure()
@@ -1255,8 +1382,6 @@ with col_center:
 
                 # ── SPLITS TAB ────────────────────────────────────────────────
                 elif tab == "Splits":
-                    gate("deep_dive_splits", "Home / Away Splits",
-                         "Situationsdata och hemma/borta-splits ingår i Base-plan.")
                     splits = _player_splits(int(sel_id))
                     ha_df  = splits["ha"]
                     sit_df = splits["sit"]
@@ -1310,6 +1435,119 @@ with col_center:
                           {_stat_block('GWG', _sv('gameWinningGoals'), '#5a8f4e', 13)}
                           {_stat_block('OTG', _sv('otGoals'), '#f97316', 13)}
                         </div>""")
+
+                # ── ADVANCED TAB ──────────────────────────────────────────────
+                elif tab == "Advanced":
+                    # Edge tracking data
+                    _edge = _player_edge(int(sel_id))
+                    _edge_rows = [
+                        ("maxSkatingSpeed",  "Max Speed",      "skate_speed", "km/h", "#f97316"),
+                        ("hardestShot",       "Hardest Shot",   "shot_speed",  "km/h", "#f97316"),
+                        ("offensiveZoneTime", "Offensive Zone", "zone_time",   "sec",  "#5a8f4e"),
+                        ("defensiveZoneTime", "Defensive Zone", "zone_time",   "sec",  "#87ceeb"),
+                        ("highDangerSOG",     "High Danger SOG","sog",         "",     "#f97316"),
+                        ("totalDistanceSkated","Distance/game", "dist",        "km",   "#8896a8"),
+                    ]
+                    _has_edge = any(k in _edge for k, *_ in _edge_rows)
+                    if _has_edge:
+                        _panel_header("Edge tracking — NHL player analytics")
+                        _edge_html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">'
+                        for _cat, _lbl, _val_col, _unit, _col in _edge_rows:
+                            if _cat in _edge:
+                                _v = _edge[_cat][_val_col]
+                                _vstr = f"{float(_v):.1f} {_unit}".strip() if (pd.notna(_v) and _v is not None) else "—"
+                                _edge_html += (
+                                    f'<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);'
+                                    f'border-radius:4px;padding:6px 8px;text-align:center;">'
+                                    f'<div style="color:#8896a8;font-size:9px;text-transform:uppercase;'
+                                    f'letter-spacing:0.04em;margin-bottom:3px;">{_lbl}</div>'
+                                    f'<div style="color:{_col};font-weight:700;font-size:14px;'
+                                    f'font-family:monospace;">{_vstr}</div>'
+                                    f'</div>'
+                                )
+                        _edge_html += '</div>'
+                        st.html(_edge_html)
+
+                    # Shot rate + goals rolling chart
+                    _df_adv = _player_form_series(int(sel_id))
+                    if not _df_adv.empty and "shots" in _df_adv.columns:
+                        _df_adv = _df_adv.copy()
+                        _cr_sel = st.session_state.t_chart_range
+                        if _cr_sel == "L10":   _df_adv = _df_adv.tail(10).reset_index(drop=True)
+                        elif _cr_sel == "L20": _df_adv = _df_adv.tail(20).reset_index(drop=True)
+                        elif _cr_sel == "L40": _df_adv = _df_adv.tail(40).reset_index(drop=True)
+                        _df_adv["shots_roll5"] = _df_adv["shots"].rolling(5, min_periods=2).mean()
+                        _df_adv["goals_roll5"] = _df_adv["g"].rolling(5, min_periods=2).mean()
+                        _df_adv["hits_roll5"]  = _df_adv["hits"].rolling(5, min_periods=2).mean()
+
+                        _panel_header("Shot rate & goals trend — 5g rolling")
+                        _fig_adv = go.Figure()
+                        _fig_adv.add_scatter(
+                            x=_df_adv["date"].astype(str).str[:10], y=_df_adv["shots_roll5"],
+                            mode="lines", line=dict(color="#f97316", width=2),
+                            name="Shots/5g", yaxis="y",
+                            hovertemplate="%{x}: %{y:.1f} shots<extra></extra>",
+                        )
+                        _fig_adv.add_scatter(
+                            x=_df_adv["date"].astype(str).str[:10], y=_df_adv["goals_roll5"],
+                            mode="lines", line=dict(color="#5a8f4e", width=2, dash="dot"),
+                            name="Goals/5g", yaxis="y2",
+                            hovertemplate="%{x}: %{y:.2f} goals<extra></extra>",
+                        )
+                        _layout_adv = dict(**CHART_BASE)
+                        _layout_adv["height"] = 200
+                        _layout_adv["legend"] = dict(orientation="h", y=1.1, font=dict(size=9))
+                        _layout_adv["yaxis"]  = dict(title="Shots", gridcolor="rgba(255,255,255,0.04)",
+                                                      tickfont=dict(size=9), color="#f97316")
+                        _layout_adv["yaxis2"] = dict(title="Goals", overlaying="y", side="right",
+                                                      gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9),
+                                                      color="#5a8f4e")
+                        _fig_adv.update_layout(**_layout_adv)
+                        _fig_adv.update_xaxes(tickangle=45, nticks=14)
+                        st.plotly_chart(_fig_adv, use_container_width=True,
+                                        config={"displayModeBar": False})
+
+                    # Full game log
+                    _panel_header("Full game log — shots, hits, +/-, blocked")
+                    _df_full = _player_games_full(int(sel_id))
+                    if not _df_full.empty:
+                        _full_rows = ""
+                        for _, _fg in _df_full.iterrows():
+                            _pm = int(_fg["PM"])
+                            _pm_c = "#5a8f4e" if _pm > 0 else ("#c41e3a" if _pm < 0 else "#8896a8")
+                            _pm_s = f"+{_pm}" if _pm > 0 else str(_pm)
+                            _pts  = int(_fg["PTS"])
+                            _pts_c = "#f97316" if _pts >= 2 else ("#5a8f4e" if _pts == 1 else "#8896a8")
+                            _full_rows += (
+                                f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                f'<td style="padding:3px 6px;color:#8896a8;font-size:10px;font-family:monospace;">{str(_fg["date"])[:10]}</td>'
+                                f'<td style="padding:3px 5px;color:#8896a8;font-size:10px;">{_fg["ha"]}</td>'
+                                f'<td style="padding:3px 5px;color:#fff;font-size:10px;font-weight:600;">{_fg["opp"] if pd.notna(_fg["opp"]) else "—"}</td>'
+                                f'<td style="padding:3px 5px;color:#fff;font-size:10px;text-align:center;">{int(_fg["G"])}</td>'
+                                f'<td style="padding:3px 5px;color:#8896a8;font-size:10px;text-align:center;">{int(_fg["A"])}</td>'
+                                f'<td style="padding:3px 5px;color:{_pts_c};font-weight:700;font-size:10px;text-align:center;">{_pts}</td>'
+                                f'<td style="padding:3px 5px;color:#f97316;font-size:10px;text-align:center;">{int(_fg["S"])}</td>'
+                                f'<td style="padding:3px 5px;color:#8896a8;font-size:10px;text-align:center;">{int(_fg["H"])}</td>'
+                                f'<td style="padding:3px 5px;color:{_pm_c};font-family:monospace;font-size:10px;text-align:center;">{_pm_s}</td>'
+                                f'<td style="padding:3px 6px;color:#87ceeb;font-size:10px;text-align:center;">{int(_fg["BLK"])}</td>'
+                                f'</tr>'
+                            )
+                        st.html(
+                            f'<div style="overflow-y:auto;max-height:320px;">'
+                            f'<table style="width:100%;border-collapse:collapse;">'
+                            f'<thead><tr style="background:rgba(255,255,255,0.03);position:sticky;top:0;">'
+                            f'<th style="padding:3px 6px;color:#8896a8;font-size:9px;text-align:left;">Date</th>'
+                            f'<th style="padding:3px 5px;color:#8896a8;font-size:9px;">H/A</th>'
+                            f'<th style="padding:3px 5px;color:#8896a8;font-size:9px;">Opp</th>'
+                            f'<th style="padding:3px 5px;color:#8896a8;font-size:9px;text-align:center;">G</th>'
+                            f'<th style="padding:3px 5px;color:#8896a8;font-size:9px;text-align:center;">A</th>'
+                            f'<th style="padding:3px 5px;color:#5a8f4e;font-size:9px;text-align:center;">PTS</th>'
+                            f'<th style="padding:3px 5px;color:#f97316;font-size:9px;text-align:center;">S</th>'
+                            f'<th style="padding:3px 5px;color:#8896a8;font-size:9px;text-align:center;">H</th>'
+                            f'<th style="padding:3px 5px;color:#8896a8;font-size:9px;text-align:center;">+/-</th>'
+                            f'<th style="padding:3px 6px;color:#87ceeb;font-size:9px;text-align:center;">BLK</th>'
+                            f'</tr></thead><tbody>{_full_rows}</tbody></table></div>'
+                        )
 
         # ══════════════════════════════════════════════════════════════════════
         #  GOALIE CENTER
@@ -1440,6 +1678,65 @@ with col_center:
                             ("SA",  _gv(hr,"sa"),                           _gv(ar,"sa"),                          "#8896a8"),
                         ])
 
+                elif tab == "Advanced":
+                    _panel_header("GA trend — goals against rolling avg")
+                    _df_gg_adv = _goalie_games(int(sel_id))
+                    if not _df_gg_adv.empty:
+                        _df_gg_adv = _df_gg_adv.sort_values("date").reset_index(drop=True)
+                        _ga_roll5  = _df_gg_adv["GA"].rolling(5, min_periods=2).mean()
+                        _sv_roll5  = _df_gg_adv["sv_pct"].rolling(5, min_periods=2).mean()
+                        _fig_ga = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                                vertical_spacing=0.08,
+                                                subplot_titles=["Sv% (5g rolling)", "GA (5g rolling)"])
+                        _fig_ga.add_scatter(
+                            x=_df_gg_adv["date"].astype(str).str[:10], y=_sv_roll5,
+                            mode="lines", line=dict(color="#f97316", width=2),
+                            name="Sv%/5g", row=1, col=1,
+                            hovertemplate="%{x}: %{y:.2f}%<extra></extra>",
+                        )
+                        _fig_ga.add_hline(y=91.5, line_dash="dot", line_color="#5a8f4e",
+                                          annotation_text="91.5%", annotation_font_size=8,
+                                          annotation_font_color="#5a8f4e", row=1, col=1)
+                        _fig_ga.add_bar(
+                            x=_df_gg_adv["date"].astype(str).str[:10], y=_df_gg_adv["GA"],
+                            marker_color="#c41e3a", opacity=0.7, name="GA",
+                            row=2, col=1,
+                            hovertemplate="%{x}: %{y} GA<extra></extra>",
+                        )
+                        _fig_ga.add_scatter(
+                            x=_df_gg_adv["date"].astype(str).str[:10], y=_ga_roll5,
+                            mode="lines", line=dict(color="#87ceeb", width=1.5),
+                            name="GA/5g", row=2, col=1,
+                            hovertemplate="%{x}: %{y:.2f}<extra></extra>",
+                        )
+                        _fig_ga.update_layout(
+                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                            font=dict(color="#8896a8", size=9), height=300,
+                            margin=dict(l=0, r=0, t=28, b=0),
+                            showlegend=False,
+                            hoverlabel=dict(bgcolor="#111", font_color="#f1f5f9"),
+                        )
+                        _fig_ga.update_xaxes(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=8))
+                        _fig_ga.update_yaxes(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=8))
+                        for _ann in _fig_ga.layout.annotations:
+                            _ann.font.size = 9
+                            _ann.font.color = "#8896a8"
+                        st.plotly_chart(_fig_ga, use_container_width=True, config={"displayModeBar": False})
+
+                    _panel_header("Quality starts — Sv% ≥ 91.5%")
+                    if not _df_gg_adv.empty:
+                        _qs = int((_df_gg_adv["sv_pct"] >= 91.5).sum())
+                        _gp_g = len(_df_gg_adv)
+                        _qs_pct = _qs / _gp_g * 100 if _gp_g > 0 else 0
+                        _qs_c = "#f97316" if _qs_pct >= 60 else ("#5a8f4e" if _qs_pct >= 45 else "#8896a8")
+                        st.html(
+                            f'<div style="display:flex;gap:8px;margin-bottom:10px;">'
+                            f'{_stat_block("Quality Starts", _qs, _qs_c, 18)}'
+                            f'{_stat_block("QS%", f"{_qs_pct:.0f}%", _qs_c, 18)}'
+                            f'{_stat_block("Really Bad", int((_df_gg_adv["sv_pct"] < 88.5).sum()), "#c41e3a", 18)}'
+                            f'</div>'
+                        )
+
         # ══════════════════════════════════════════════════════════════════════
         #  TEAM CENTER
         # ══════════════════════════════════════════════════════════════════════
@@ -1514,6 +1811,27 @@ with col_center:
                             name="GA",
                             hovertemplate="%{x}: %{y} GA<extra></extra>",
                         )
+                        # 5-game rolling GF average (Koyfin end-label style)
+                        _tg_sorted = df_tg.sort_values("date")
+                        _gf_roll5  = _tg_sorted["GF"].fillna(0).rolling(5, min_periods=3).mean()
+                        fig_team.add_scatter(
+                            x=_tg_sorted["date"].astype(str).str[:10],
+                            y=_gf_roll5,
+                            mode="lines",
+                            line=dict(color="#5a8f4e", width=1.5, dash="dot"),
+                            name="GF 5g avg",
+                            hovertemplate="%{x}: %{y:.1f} GF avg<extra></extra>",
+                            opacity=0.8,
+                        )
+                        _gf5_valid = _gf_roll5.dropna()
+                        if not _gf5_valid.empty:
+                            _last_gf5_dt  = str(_tg_sorted["date"].iloc[_gf5_valid.index[-1] - _tg_sorted.index[0]])[:10]
+                            fig_team.add_annotation(
+                                x=_last_gf5_dt, y=float(_gf5_valid.iloc[-1]),
+                                text=f"  {float(_gf5_valid.iloc[-1]):.1f}",
+                                showarrow=False, xanchor="left",
+                                font=dict(size=8, color="#5a8f4e"),
+                            )
                         layout_team = dict(**CHART_BASE)
                         layout_team["height"] = 210
                         layout_team["legend"] = dict(orientation="h", y=1.08, font=dict(size=9))
@@ -1553,8 +1871,78 @@ with col_center:
                         )
 
                 elif tab == "Career":
+                    try:
+                        from lib.db import team_career as _tc_fn
+                        df_tc = _tc_fn(sel_id)
+                    except Exception:
+                        df_tc = pd.DataFrame()
+                    if not df_tc.empty:
+                        def _sl(s: int) -> str:
+                            y = str(s)[:4]; return f"{y}-{str(int(y)+1)[2:]}"
+                        df_tc["season_label"] = df_tc["season"].apply(_sl)
+                        best_tc = int(df_tc["points"].max())
+                        fig_tc = go.Figure()
+                        fig_tc.add_hline(y=96, line_dash="dot",
+                                         line_color="rgba(90,143,78,0.3)", line_width=1,
+                                         annotation_text="96 pts",
+                                         annotation_font=dict(size=8, color="#5a8f4e"))
+                        fig_tc.add_trace(go.Scatter(
+                            x=df_tc["season_label"], y=df_tc["points"],
+                            mode="lines+markers", name="Points",
+                            line=dict(color="#5a8f4e", width=2),
+                            marker=dict(size=4),
+                            fill="tozeroy", fillcolor="rgba(90,143,78,0.06)",
+                            hovertemplate="%{x}: %{y} pts<extra></extra>",
+                        ))
+                        # Annotate best season
+                        _best_idx = df_tc["points"].idxmax()
+                        fig_tc.add_annotation(
+                            x=df_tc.loc[_best_idx, "season_label"],
+                            y=int(df_tc.loc[_best_idx, "points"]),
+                            text=f"Best {int(df_tc.loc[_best_idx, 'points'])}",
+                            showarrow=True, arrowhead=2, arrowcolor="#f97316",
+                            ax=0, ay=-28, font=dict(size=8, color="#f97316"),
+                        )
+                        layout_tc = dict(**CHART_BASE)
+                        layout_tc["height"] = 190
+                        layout_tc["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9))
+                        fig_tc.update_layout(**layout_tc)
+                        fig_tc.update_xaxes(type="category", tickangle=-45, tickfont=dict(size=8),
+                                            gridcolor="rgba(255,255,255,0.04)")
+                        st.plotly_chart(fig_tc, use_container_width=True, config={"displayModeBar": False})
+
+                        # Season-by-season mini table
+                        _tc_rows = ""
+                        for _, _r in df_tc.sort_values("season", ascending=False).iterrows():
+                            _gd = int(_r["goalDifferential"]) if "goalDifferential" in _r.index else 0
+                            _gdc = "#5a8f4e" if _gd > 0 else "#c41e3a"
+                            _gds = f"+{_gd}" if _gd > 0 else str(_gd)
+                            _pv  = int(_r["points"])
+                            _pc  = "#f97316" if _pv == best_tc else ("#5a8f4e" if _pv >= 96 else "#fff")
+                            _tc_rows += (
+                                f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                f'<td style="padding:3px 8px;color:#fff;font-weight:600;font-size:10px;">{_r["season_label"]}</td>'
+                                f'<td style="padding:3px 5px;color:#8896a8;font-size:10px;text-align:right;">{int(_r["gamesPlayed"])}</td>'
+                                f'<td style="padding:3px 5px;color:#5a8f4e;font-size:10px;text-align:right;">{int(_r["wins"])}</td>'
+                                f'<td style="padding:3px 5px;color:#c41e3a;font-size:10px;text-align:right;">{int(_r["losses"])}</td>'
+                                f'<td style="padding:3px 5px;color:{_pc};font-weight:700;font-size:10px;text-align:right;">{_pv}</td>'
+                                f'<td style="padding:3px 8px;color:{_gdc};font-family:monospace;font-size:10px;text-align:right;">{_gds}</td>'
+                                f'</tr>'
+                            )
+                        st.html(
+                            '<div style="overflow-y:auto;max-height:220px;">'
+                            '<table style="width:100%;border-collapse:collapse;">'
+                            '<thead><tr style="background:rgba(255,255,255,0.03);position:sticky;top:0;">'
+                            '<th style="padding:3px 8px;color:#8896a8;font-size:9px;text-align:left;">Season</th>'
+                            '<th style="padding:3px 5px;color:#8896a8;font-size:9px;text-align:right;">GP</th>'
+                            '<th style="padding:3px 5px;color:#5a8f4e;font-size:9px;text-align:right;">W</th>'
+                            '<th style="padding:3px 5px;color:#c41e3a;font-size:9px;text-align:right;">L</th>'
+                            '<th style="padding:3px 5px;color:#f97316;font-size:9px;text-align:right;">PTS</th>'
+                            '<th style="padding:3px 8px;color:#8896a8;font-size:9px;text-align:right;">GD</th>'
+                            f'</tr></thead><tbody>{_tc_rows}</tbody></table></div>'
+                        )
                     st.page_link("pages/9_Team_History.py",
-                                 label="→ Full Team History with franchise arc",
+                                 label="→ Full history incl. playoff bracket",
                                  icon=":material/history:")
 
                 elif tab == "Splits":
@@ -1580,6 +1968,84 @@ with col_center:
                             ("GF/g", _tv(hr,"gf_avg",lambda v:f"{v:.2f}"),  _tv(ar,"gf_avg",lambda v:f"{v:.2f}"),  "#f97316"),
                             ("GA/g", _tv(hr,"ga_avg",lambda v:f"{v:.2f}"),  _tv(ar,"ga_avg",lambda v:f"{v:.2f}"),  "#c41e3a"),
                         ])
+
+                elif tab == "Advanced":
+                    df_tr = _team_rolling_series(sel_id)
+                    if df_tr.empty:
+                        st.markdown("<p style='color:#8896a8;font-size:11px;'>No advanced data available.</p>",
+                                    unsafe_allow_html=True)
+                    else:
+                        # wins_last_5 sparkbar
+                        _last_tr = df_tr.iloc[-1] if not df_tr.empty else None
+                        if _last_tr is not None:
+                            _w5 = int(_last_tr["wins_last_5"]) if pd.notna(_last_tr["wins_last_5"]) else 0
+                            _l5 = int(_last_tr["losses_last_5"]) if pd.notna(_last_tr["losses_last_5"]) else 0
+                            _w5c = "#5a8f4e" if _w5 >= 4 else ("#f97316" if _w5 >= 3 else ("#8896a8" if _w5 >= 2 else "#c41e3a"))
+                            _last_sog = float(_last_tr["sog_avg_10g"]) if pd.notna(_last_tr["sog_avg_10g"]) else 0
+                            _sog_c = "#f97316" if _last_sog >= 35 else ("#5a8f4e" if _last_sog >= 30 else "#8896a8")
+                            _gf10g_val = f"{float(_last_tr['gf_avg_10g']):.2f}" if pd.notna(_last_tr["gf_avg_10g"]) else "—"
+                            st.html(
+                                f'<div style="display:flex;gap:6px;margin-bottom:10px;">'
+                                f'{_stat_block("W Last 5", f"{_w5}–{_l5}", _w5c, 16)}'
+                                f'{_stat_block("SOG/10g", f"{_last_sog:.1f}", _sog_c, 16)}'
+                                f'{_stat_block("GF/10g", _gf10g_val, "#5a8f4e", 16)}'
+                                f'</div>'
+                            )
+
+                        # SOG + GF rolling chart
+                        _panel_header("Shots on goal & scoring — 10g rolling avg")
+                        _fig_sog = go.Figure()
+                        _fig_sog.add_scatter(
+                            x=df_tr["game_date"].astype(str).str[:10], y=df_tr["sog_avg_10g"],
+                            mode="lines", line=dict(color="#f97316", width=2),
+                            name="SOG/10g", yaxis="y",
+                            hovertemplate="%{x}: %{y:.1f} SOG<extra></extra>",
+                        )
+                        _fig_sog.add_scatter(
+                            x=df_tr["game_date"].astype(str).str[:10], y=df_tr["gf_avg_10g"],
+                            mode="lines", line=dict(color="#5a8f4e", width=2, dash="dot"),
+                            name="GF/10g", yaxis="y2",
+                            hovertemplate="%{x}: %{y:.2f} GF<extra></extra>",
+                        )
+                        _layout_sog = dict(**CHART_BASE)
+                        _layout_sog["height"] = 200
+                        _layout_sog["legend"] = dict(orientation="h", y=1.1, font=dict(size=9))
+                        _layout_sog["yaxis"]  = dict(title="SOG", gridcolor="rgba(255,255,255,0.04)",
+                                                      tickfont=dict(size=9), color="#f97316")
+                        _layout_sog["yaxis2"] = dict(title="GF", overlaying="y", side="right",
+                                                      gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9),
+                                                      color="#5a8f4e")
+                        _fig_sog.update_layout(**_layout_sog)
+                        _fig_sog.update_xaxes(tickangle=45, nticks=14)
+                        st.plotly_chart(_fig_sog, use_container_width=True,
+                                        config={"displayModeBar": False})
+
+                        # Hits + blocked shots trend
+                        _has_hits = df_tr["hits"].notna().any()
+                        if _has_hits:
+                            _panel_header("Physical play — hits & blocked shots")
+                            _fig_hits = go.Figure()
+                            _hits_roll = df_tr["hits"].rolling(10, min_periods=3).mean()
+                            _blk_roll  = df_tr["blocked_shots"].rolling(10, min_periods=3).mean()
+                            _fig_hits.add_scatter(
+                                x=df_tr["game_date"].astype(str).str[:10], y=_hits_roll,
+                                mode="lines", line=dict(color="#c41e3a", width=2),
+                                name="Hits/10g",
+                                hovertemplate="%{x}: %{y:.1f} hits<extra></extra>",
+                            )
+                            _fig_hits.add_scatter(
+                                x=df_tr["game_date"].astype(str).str[:10], y=_blk_roll,
+                                mode="lines", line=dict(color="#87ceeb", width=2, dash="dot"),
+                                name="BLK/10g",
+                                hovertemplate="%{x}: %{y:.1f} blocked<extra></extra>",
+                            )
+                            _layout_hits = dict(**CHART_BASE)
+                            _layout_hits["height"] = 180
+                            _layout_hits["legend"] = dict(orientation="h", y=1.1, font=dict(size=9))
+                            _fig_hits.update_layout(**_layout_hits)
+                            _fig_hits.update_xaxes(tickangle=45, nticks=14)
+                            st.plotly_chart(_fig_hits, use_container_width=True,
+                                            config={"displayModeBar": False})
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  RIGHT PANEL — persistent bio card
@@ -1679,6 +2145,24 @@ with col_right:
                     f'<span style="color:#8896a8;font-size:9px;">Sample</span>'
                     f'</div>'
                 )
+                # Mini last-5 game pts dots
+                _last5_df = _player_form_series(int(sel_id)).tail(5)
+                _dots_html = ""
+                for _, _lg in _last5_df.iterrows():
+                    _lp = int(_lg["pts"])
+                    _lc = "#f97316" if _lp >= 2 else ("#5a8f4e" if _lp == 1 else "rgba(255,255,255,0.1)")
+                    _dots_html += (
+                        f'<div style="flex:1;height:20px;background:{_lc};border-radius:3px;'
+                        f'display:flex;align-items:center;justify-content:center;">'
+                        f'<span style="color:#fff;font-size:9px;font-weight:700;">{_lp}</span>'
+                        f'</div>'
+                    )
+                _last5_html = (
+                    f'<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">'
+                    f'<div style="color:#8896a8;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Last 5 games · pts</div>'
+                    f'<div style="display:flex;gap:3px;">{_dots_html}</div>'
+                    f'</div>'
+                ) if _dots_html else ""
 
                 st.html(f"""
                 <div style="border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px;">
@@ -1698,6 +2182,7 @@ with col_right:
                     <span style="color:{thesis_color};font-size:10px;font-weight:600;">{thesis_text}</span>
                   </div>
                   {_traffic_html}
+                  {_last5_html}
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px;">
                     {_stat_block('PTS',  int(row['pts']),                  '#5a8f4e', 15)}
                     {_stat_block('+/-',  pm_s,                             pm_c,      15)}
@@ -1724,12 +2209,6 @@ with col_right:
                                  use_container_width=True, type="secondary"):
                         _udb.watchlist_remove(sel_id, _uid)
                         st.rerun()
-                elif not has_feature("watchlist"):
-                    soft_gate("watchlist", "Watchlist",
-                              "Spåra dina favoritspelare med Base-plan.")
-                elif watchlist_slots_remaining(_uid) <= 0:
-                    soft_gate("watchlist_unlimited", "Fler watchlist-platser",
-                              "Base ger 10 platser — Plus ger obegränsat.")
                 else:
                     if st.button("+ Watch player", key=f"rp_watch_{sel_id}",
                                  use_container_width=True, type="primary"):

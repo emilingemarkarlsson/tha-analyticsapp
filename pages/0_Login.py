@@ -163,91 +163,50 @@ with left:
 
 # ── RIGHT: auth form ───────────────────────────────────────────────────────────
 with right:
-    mode = st.session_state.get("auth_mode", "login")
+    # Handle query param → default tab
+    qp = st.query_params
+    if qp.get("mode") == "signup":
+        st.session_state["auth_tab"] = 1
+        st.query_params.clear()
+        st.rerun()
+    elif qp.get("mode") == "forgot":
+        st.session_state["auth_tab"] = 2
+        st.query_params.clear()
+        st.rerun()
 
-    # ── Forgot password ────────────────────────────────────────────────────────
-    if mode == "forgot":
-        st.markdown(
-            "<h2 style='color:#fff;font-size:24px;font-weight:800;"
-            "letter-spacing:-0.02em;margin:64px 0 6px;'>Reset your password</h2>"
-            "<p style='color:#8896a8;font-size:13px;margin:0 0 28px;'>"
-            "Enter your email and we'll send a reset link.</p>",
-            unsafe_allow_html=True,
-        )
-        reset_email = st.text_input("Email", placeholder="you@email.com", key="reset_email")
-        if st.button("Send reset link", use_container_width=True):
-            if not reset_email:
-                st.error("Please enter your email address.")
-            else:
-                try:
-                    _get_client().auth.reset_password_email(
-                        reset_email,
-                        options={"redirect_to": "http://localhost:8501/Account"},
-                    )
-                    st.success("Reset link sent — check your inbox.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-        st.markdown(
-            "<div style='margin-top:12px;'>"
-            "<a href='/Login' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>← Back</a>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
+    st.markdown("<div style='height:64px;'></div>", unsafe_allow_html=True)
 
-    # ── Sign up ────────────────────────────────────────────────────────────────
-    elif mode == "signup":
-        st.markdown(
-            "<h2 style='color:#fff;font-size:24px;font-weight:800;"
-            "letter-spacing:-0.02em;margin:64px 0 6px;'>Create account</h2>"
-            "<p style='color:#8896a8;font-size:13px;margin:0 0 28px;'>"
-            "Free. No credit card required.</p>",
-            unsafe_allow_html=True,
-        )
-        with st.form("signup_form"):
-            new_email = st.text_input("Email", placeholder="you@email.com")
-            new_pass  = st.text_input("Password", type="password", placeholder="At least 6 characters")
-            new_pass2 = st.text_input("Confirm password", type="password", placeholder="Repeat password")
-            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
-            submitted = st.form_submit_button("Create account", use_container_width=True)
+    # ── Tabs ───────────────────────────────────────────────────────────────────
+    st.markdown("""
+<style>
+/* Tab strip */
+div[data-testid="stTabs"] button[role="tab"] {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #8896a8 !important;
+    padding: 10px 0 !important;
+    flex: 1 !important;
+    border-bottom: 2px solid rgba(255,255,255,0.08) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+}
+div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    color: #fff !important;
+    border-bottom: 2px solid #5a8f4e !important;
+}
+div[data-testid="stTabs"] [role="tablist"] {
+    gap: 0 !important;
+    border-bottom: none !important;
+    margin-bottom: 28px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-        if submitted:
-            if not new_email or not new_pass:
-                st.error("Please enter your email and password.")
-            elif new_pass != new_pass2:
-                st.error("Passwords don't match.")
-            elif len(new_pass) < 6:
-                st.error("Password must be at least 6 characters.")
-            else:
-                with st.spinner(""):
-                    ok, err = sign_up(new_email, new_pass)
-                if ok:
-                    ok2, _ = sign_in(new_email, new_pass)
-                    if ok2:
-                        st.switch_page("app.py")
-                    else:
-                        st.success("Account created! Sign in below.")
-                        st.session_state["auth_mode"] = "login"
-                        st.rerun()
-                else:
-                    st.error(err)
-        st.markdown(
-            "<div style='margin-top:16px;'>"
-            "<a href='/Login' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>← Sign in instead</a>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
+    default_tab = st.session_state.pop("auth_tab", 0)
+    tab_login, tab_signup = st.tabs(["Sign in", "Create free account"])
 
-    # ── Login ──────────────────────────────────────────────────────────────────
-    else:
-        st.markdown(
-            "<h2 style='color:#fff;font-size:24px;font-weight:800;"
-            "letter-spacing:-0.02em;margin:64px 0 6px;'>Welcome back</h2>"
-            "<p style='color:#8896a8;font-size:13px;margin:0 0 24px;'>"
-            "Sign in to continue.</p>",
-            unsafe_allow_html=True,
-        )
+    # ── Sign in tab ────────────────────────────────────────────────────────────
+    with tab_login:
         with st.form("login_form"):
             email    = st.text_input("Email", placeholder="you@email.com")
             password = st.text_input("Password", type="password", placeholder="••••••••")
@@ -266,22 +225,69 @@ with right:
                     st.error(err)
 
         st.markdown(
-            "<div style='margin-top:16px; display:flex; gap:24px;'>"
-            "<a href='/Login?mode=signup' target='_self' style='color:#8896a8;font-size:13px;"
-            "text-decoration:underline;text-underline-offset:3px;'>Create account →</a>"
+            "<div style='margin-top:16px;'>"
             "<a href='/Login?mode=forgot' target='_self' style='color:#8896a8;font-size:13px;"
             "text-decoration:underline;text-underline-offset:3px;'>Forgot password?</a>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Handle query param mode switching
-        qp = st.query_params
-        if qp.get("mode") == "signup":
-            st.session_state["auth_mode"] = "signup"
-            st.query_params.clear()
-            st.rerun()
-        elif qp.get("mode") == "forgot":
-            st.session_state["auth_mode"] = "forgot"
-            st.query_params.clear()
-            st.rerun()
+
+    # ── Create account tab ─────────────────────────────────────────────────────
+    with tab_signup:
+        st.markdown(
+            "<p style='color:#8896a8;font-size:13px;margin:0 0 20px;'>"
+            "Free to join. No credit card required.</p>",
+            unsafe_allow_html=True,
+        )
+        with st.form("signup_form"):
+            new_email = st.text_input("Email", placeholder="you@email.com")
+            new_pass  = st.text_input("Password", type="password", placeholder="At least 6 characters")
+            new_pass2 = st.text_input("Confirm password", type="password", placeholder="Repeat password")
+            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+            submitted_signup = st.form_submit_button("Create account", use_container_width=True)
+
+        if submitted_signup:
+            if not new_email or not new_pass:
+                st.error("Please fill in all fields.")
+            elif new_pass != new_pass2:
+                st.error("Passwords don't match.")
+            elif len(new_pass) < 6:
+                st.error("Password must be at least 6 characters.")
+            else:
+                with st.spinner("Creating your account..."):
+                    ok, err = sign_up(new_email, new_pass)
+                if ok:
+                    ok2, _ = sign_in(new_email, new_pass)
+                    if ok2:
+                        st.switch_page("app.py")
+                    else:
+                        st.success("Account created! Switch to Sign in.")
+                else:
+                    st.error(err)
+
+    # ── Forgot password (shown as separate section below tabs) ─────────────────
+    if st.session_state.get("auth_mode") == "forgot":
+        st.markdown("<hr style='border-color:rgba(255,255,255,0.08);margin:32px 0;'>",
+                    unsafe_allow_html=True)
+        st.markdown(
+            "<p style='color:#fff;font-size:14px;font-weight:700;margin:0 0 8px;'>"
+            "Reset password</p>"
+            "<p style='color:#8896a8;font-size:13px;margin:0 0 16px;'>"
+            "Enter your email to receive a reset link.</p>",
+            unsafe_allow_html=True,
+        )
+        reset_email = st.text_input("Email", placeholder="you@email.com", key="reset_email")
+        if st.button("Send reset link", use_container_width=True):
+            if not reset_email:
+                st.error("Please enter your email address.")
+            else:
+                try:
+                    _get_client().auth.reset_password_email(reset_email)
+                    st.success("Reset link sent — check your inbox.")
+                    st.session_state.pop("auth_mode", None)
+                except Exception as e:
+                    st.error(f"Error: {e}")
+    elif qp.get("mode") == "forgot" or st.session_state.get("auth_tab") == 2:
+        st.session_state["auth_mode"] = "forgot"
+        st.rerun()
 

@@ -115,6 +115,13 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
+    # ── Umami analytics ───────────────────────────────────────────────────────
+    try:
+        from lib.tracking import inject as _track
+        _track()
+    except Exception:
+        pass
+
     with st.sidebar:
         # ── Logo ──────────────────────────────────────────────────────────────
         st.markdown(

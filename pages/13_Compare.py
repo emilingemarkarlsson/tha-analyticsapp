@@ -13,6 +13,7 @@ from lib.components import page_header, empty_state, inline_error, data_source_f
 
 st.set_page_config(
     page_title="Compare – THA Analytics",
+    page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg",
     layout="wide",
     initial_sidebar_state="expanded",
 )

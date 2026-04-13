@@ -17,7 +17,7 @@ from lib.entitlements import ai_queries_remaining, record_ai_query, has_feature
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Ask AI – THA Analytics",
-    page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg",
+    page_icon="tha_icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )

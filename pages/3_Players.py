@@ -9,7 +9,7 @@ from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 from lib.components import page_header, zscore_legend, data_source_footer, tier_badge_html, perf_tier
 
-st.set_page_config(page_title="Players – THA Analytics", page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Players – THA Analytics", page_icon="tha_icon.png", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

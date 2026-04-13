@@ -9,7 +9,7 @@ from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 from lib.components import page_header, data_source_footer
 
-st.set_page_config(page_title="Playoffs – THA Analytics", page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Playoffs – THA Analytics", page_icon="tha_icon.png", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

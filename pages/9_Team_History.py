@@ -14,7 +14,7 @@ from lib.components import (
     stat_card_row, tier_badge_html, methodology_note,
 )
 
-st.set_page_config(page_title="Team History – THA Analytics", page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Team History – THA Analytics", page_icon="tha_icon.png", layout="wide", initial_sidebar_state="expanded")
 _render_sidebar()
 require_login()
 

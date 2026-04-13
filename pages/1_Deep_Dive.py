@@ -10,7 +10,7 @@ from lib.db import query, query_fresh, get_data_date
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 
-st.set_page_config(page_title="Deep Dive – THA Analytics", page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Deep Dive – THA Analytics", page_icon="tha_icon.png", layout="wide", initial_sidebar_state="expanded")
 
 # ── Session state helper ───────────────────────────────────────────────────────
 def _ss(key, default):

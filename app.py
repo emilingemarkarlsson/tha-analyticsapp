@@ -6,7 +6,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="THA Analytics",
-    page_icon="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg",
+    page_icon="tha_icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )

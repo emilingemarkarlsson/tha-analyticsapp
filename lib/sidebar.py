@@ -147,6 +147,19 @@ def render() -> None:
         st.page_link("app.py",               label="Intelligence Feed", icon=":material/trending_up:")
         st.page_link("pages/1_Deep_Dive.py", label="Deep Dive",         icon=":material/analytics:")
         st.page_link("pages/2_Standings.py", label="Standings",         icon=":material/leaderboard:")
+        st.page_link("pages/3_Players.py",   label="Players",           icon=":material/people:")
+        st.page_link("pages/4_Teams.py",     label="Teams",             icon=":material/groups:")
+
+        # ── Nav group: Explore ─────────────────────────────────────────────────
+        st.markdown(
+            "<p style='color:rgba(255,255,255,0.25);font-size:9px;font-weight:700;"
+            "text-transform:uppercase;letter-spacing:0.12em;padding:0 4px;"
+            "margin:10px 0 2px;'>Explore</p>",
+            unsafe_allow_html=True,
+        )
+        st.page_link("pages/8_Player_History.py", label="Player History", icon=":material/person_search:")
+        st.page_link("pages/11_Goalies.py",        label="Goalies",        icon=":material/sports_hockey:")
+        st.page_link("pages/12_Playoffs.py",       label="Playoffs",       icon=":material/emoji_events:")
 
         # ── Nav group: Tools ───────────────────────────────────────────────────
         st.markdown(
@@ -155,7 +168,10 @@ def render() -> None:
             "margin:10px 0 2px;'>Tools</p>",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/5_Chat.py",      label="Ask AI",            icon=":material/chat:")
+        st.page_link("pages/6_Screener.py",   label="Player Finder", icon=":material/filter_list:")
+        st.page_link("pages/7_Watchlist.py",  label="Watchlist",     icon=":material/bookmark:")
+        st.page_link("pages/5_Chat.py",        label="Ask AI",        icon=":material/chat:")
+        st.page_link("pages/13_Compare.py",    label="Compare",       icon=":material/compare_arrows:")
 
         # ── Nav group: Account ─────────────────────────────────────────────────
         st.markdown(

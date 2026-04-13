@@ -19,6 +19,12 @@ require_login()
 from lib.db import query
 from lib.components import tier_badge_html
 
+# Handle inbound navigation from Players page via query params
+_pid_param = st.query_params.get("pid")
+if _pid_param:
+    st.session_state["ph_selected_id"] = _pid_param
+    st.query_params.clear()
+
 # ── Load top trending players (cached, shown on landing) ───────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def _top_trending() -> pd.DataFrame:
@@ -145,6 +151,16 @@ else:
     player_pos = pr["position"]
     # Clear direct-selection so search takes over
     st.session_state.pop("ph_selected_id", None)
+
+# ── Ask AI button ─────────────────────────────────────────────────────────────
+_ai_col, _spacer = st.columns([1, 5])
+with _ai_col:
+    if st.button("Ask AI about this player", key="ask_ai_player", type="secondary", use_container_width=True):
+        st.session_state["chat_prefill"] = (
+            f"Tell me about {player_name}'s performance this season. "
+            f"Include their recent form, production trends, and how they compare to their season average."
+        )
+        st.switch_page("pages/5_Chat.py")
 
 # ── Load career data + bio + advanced stats ────────────────────────────────────
 try:

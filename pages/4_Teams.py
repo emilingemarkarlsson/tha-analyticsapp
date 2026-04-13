@@ -14,6 +14,12 @@ st.set_page_config(page_title="Teams – THA Analytics", layout="wide", initial_
 _render_sidebar()
 require_login()
 
+# Handle inbound navigation from Standings / Players via query params
+_team_param = st.query_params.get("team")
+if _team_param:
+    st.session_state["teams_selected"] = _team_param
+    st.query_params.clear()
+
 ALL_TEAMS = [
     "ANA","ARI","BOS","BUF","CAR","CGY","CHI","COL","CBJ","DAL",
     "DET","EDM","FLA","LAK","MIN","MTL","NSH","NJD","NYI","NYR",
@@ -103,7 +109,7 @@ if not df_season.empty:
     fz_color = "#f97316" if fz >= 0 else "#87ceeb"
     fz_str = f"+{fz:.2f}σ" if fz >= 0 else f"{fz:.2f}σ"
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1])
     with c1:
         st.metric("Points", int(row["pts_cumulative"]), f"{int(row['gp_season'])} GP")
     with c2:
@@ -112,6 +118,13 @@ if not df_season.empty:
         st.metric("GF / 10", f"{float(row['gf_avg_10g']):.2f}", f"GA: {float(row['ga_avg_10g']):.2f}")
     with c4:
         st.metric("Momentum", fz_str, "5g vs 20g baseline")
+    with c5:
+        if st.button("Ask AI", key="ask_ai_team", type="secondary", use_container_width=True):
+            st.session_state["chat_prefill"] = (
+                f"How has {TEAM_NAMES.get(team, team)} been performing this season? "
+                f"Include their recent form, goals for/against, and any notable trends."
+            )
+            st.switch_page("pages/5_Chat.py")
 
 # ── Special teams row ─────────────────────────────────────────────────────────
 if not df_team_stats.empty:

@@ -108,8 +108,16 @@ for idx, row in filtered.iterrows():
     goals_color = "#f97316" if goals >= 30 else ("#5a8f4e" if goals >= 15 else "#fff" if goals >= 5 else "#8896a8")
     rows_html += (
         f'<tr style="border-bottom:1px solid rgba(255,255,255,0.04);background:{row_bg};">'
-        f'<td style="padding:7px 14px;color:#fff;font-weight:500;font-size:12px;">{row["name"]}</td>'
-        f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:11px;font-family:monospace;">{row["team_abbr"]}</td>'
+        f'<td style="padding:7px 14px;font-size:12px;">'
+        f'<a href="/8_Player_History?pid={row["player_id"]}" target="_self" '
+        f'style="color:#fff;font-weight:500;text-decoration:none;" '
+        f'onmouseover="this.style.color=\'#5a8f4e\'" onmouseout="this.style.color=\'#fff\'">'
+        f'{row["name"]}</a></td>'
+        f'<td style="text-align:center;padding:7px 8px;font-size:11px;font-family:monospace;">'
+        f'<a href="/4_Teams?team={row["team_abbr"]}" target="_self" '
+        f'style="color:#8896a8;text-decoration:none;" '
+        f'onmouseover="this.style.color=\'#5a8f4e\'" onmouseout="this.style.color=\'#8896a8\'">'
+        f'{row["team_abbr"]}</a></td>'
         f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:12px;">{int(row["gp_season"])}</td>'
         f'<td style="text-align:center;padding:7px 8px;color:{goals_color};font-size:12px;font-weight:{"600" if goals >= 15 else "400"};">{goals}</td>'
         f'<td style="text-align:center;padding:7px 8px;color:#8896a8;font-size:12px;">{int(row["assists_season"])}</td>'

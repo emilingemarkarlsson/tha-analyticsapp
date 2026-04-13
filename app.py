@@ -147,6 +147,35 @@ if db_ok:
         unsafe_allow_html=True,
     )
 
+    # ── Morning brief ──────────────────────────────────────────────────────────
+    if not df_insights.empty:
+        st.markdown(
+            "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
+            "letter-spacing:0.08em;color:#8896a8;margin-bottom:8px;'>Morning Brief</p>",
+            unsafe_allow_html=True,
+        )
+        brief_cols = st.columns(3)
+        for i, (_, row) in enumerate(df_insights.head(3).iterrows()):
+            color = INSIGHT_COLORS.get(row["insight_type"], "#5a8f4e")
+            label = INSIGHT_LABELS.get(row["insight_type"], row["insight_type"])
+            z = float(row["zscore"])
+            z_str = f"+{z:.2f}σ" if z >= 0 else f"{z:.2f}σ"
+            z_color = "#f97316" if z >= 0 else "#87ceeb"
+            with brief_cols[i]:
+                st.markdown(
+                    f"""<div style="background:rgba(255,255,255,0.03);border:1px solid {color}33;
+                                    border-top:2px solid {color};border-radius:5px;padding:12px 14px;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="color:{color};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">{label}</span>
+                        <span style="color:{z_color};font-family:monospace;font-size:13px;font-weight:800;">{z_str}</span>
+                      </div>
+                      <div style="color:#fff;font-size:12px;font-weight:600;line-height:1.4;">{row['entity_name']}</div>
+                      <div style="color:#8896a8;font-size:11px;margin-top:2px;">{str(row.get('headline',''))[:60]}</div>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+        st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
+
     col_feed, col_side = st.columns([2, 1], gap="large")
 
     with col_feed:
@@ -244,7 +273,8 @@ if db_ok:
         rows_hot = ""
         for _, p in df_hot.iterrows():
             z = float(p["pts_zscore_5v20"])
-            rows_hot += f"""<div style="display:flex;justify-content:space-between;align-items:center;
+            rows_hot += f"""<a href="/8_Player_History?pid={p['player_id']}" target="_self" style="text-decoration:none;display:block;">
+<div style="display:flex;justify-content:space-between;align-items:center;
                               padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
               <div>
                 <div style="color:#fff;font-size:12px;font-weight:500;">{p['name']}</div>
@@ -254,7 +284,7 @@ if db_ok:
                 <div style="color:#f97316;font-family:monospace;font-size:12px;font-weight:700;">+{z:.2f}σ</div>
                 <div style="color:#8896a8;font-size:11px;">{float(p['pts_avg_5g']):.2f} pts/g</div>
               </div>
-            </div>"""
+            </div></a>"""
         st.markdown(
             f"""<div style="border:1px solid rgba(249,115,22,0.18);border-top:none;
                             border-radius:0 0 5px 5px;overflow:hidden;margin-bottom:16px;">{rows_hot}</div>""",
@@ -272,7 +302,8 @@ if db_ok:
         rows_cold = ""
         for _, p in df_cold.iterrows():
             z = float(p["pts_zscore_5v20"])
-            rows_cold += f"""<div style="display:flex;justify-content:space-between;align-items:center;
+            rows_cold += f"""<a href="/8_Player_History?pid={p['player_id']}" target="_self" style="text-decoration:none;display:block;">
+<div style="display:flex;justify-content:space-between;align-items:center;
                               padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
               <div>
                 <div style="color:#fff;font-size:12px;font-weight:500;">{p['name']}</div>
@@ -282,7 +313,7 @@ if db_ok:
                 <div style="color:#87ceeb;font-family:monospace;font-size:12px;font-weight:700;">{z:.2f}σ</div>
                 <div style="color:#8896a8;font-size:11px;">{float(p['pts_avg_5g']):.2f} pts/g</div>
               </div>
-            </div>"""
+            </div></a>"""
         st.markdown(
             f"""<div style="border:1px solid rgba(135,206,235,0.15);border-top:none;
                             border-radius:0 0 5px 5px;overflow:hidden;margin-bottom:16px;">{rows_cold}</div>""",
@@ -318,6 +349,7 @@ if db_ok:
                 z_color = "#f97316" if z >= 0.8 else "#5a8f4e"
                 z_str = f"+{z:.2f}σ"
                 rows_top += (
+                    f'<a href="/4_Teams?team={t["team_abbr"]}" target="_self" style="text-decoration:none;display:block;">'
                     f'<div style="display:flex;justify-content:space-between;align-items:center;'
                     f'padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">'
                     f'<div style="display:flex;align-items:center;gap:8px;">'
@@ -326,6 +358,7 @@ if db_ok:
                     f'</div>'
                     f'<span style="color:{z_color};font-family:monospace;font-size:12px;font-weight:700;">{z_str}</span>'
                     f'</div>'
+                    f'</a>'
                 )
             sep = '<div style="padding:4px 14px;background:rgba(255,255,255,0.02);"><span style="color:rgba(255,255,255,0.15);font-size:10px;">· · ·</span></div>'
             rows_bot = ""
@@ -334,6 +367,7 @@ if db_ok:
                 z_color = "#87ceeb" if z < -0.8 else "#8896a8"
                 z_str = f"{z:.2f}σ"
                 rows_bot += (
+                    f'<a href="/4_Teams?team={t["team_abbr"]}" target="_self" style="text-decoration:none;display:block;">'
                     f'<div style="display:flex;justify-content:space-between;align-items:center;'
                     f'padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">'
                     f'<div style="display:flex;align-items:center;gap:8px;">'
@@ -342,6 +376,7 @@ if db_ok:
                     f'</div>'
                     f'<span style="color:{z_color};font-family:monospace;font-size:12px;font-weight:700;">{z_str}</span>'
                     f'</div>'
+                    f'</a>'
                 )
             st.markdown(
                 f'<div style="border:1px solid rgba(90,143,78,0.15);border-top:none;border-radius:0 0 5px 5px;overflow:hidden;margin-bottom:16px;">'

@@ -235,3 +235,38 @@ def render() -> None:
             """,
             unsafe_allow_html=True,
         )
+
+        # ── Feedback & Support ─────────────────────────────────────────────────
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+        with st.expander("Feedback & Support", icon=":material/feedback:"):
+            from lib.feedback import send_feedback
+            from lib.auth import get_user as _get_user
+            _u = _get_user()
+
+            kind = st.selectbox(
+                "Type",
+                ["Feedback", "Bug report", "Question"],
+                label_visibility="collapsed",
+                key="fb_kind",
+            )
+            msg = st.text_area(
+                "Message",
+                placeholder="Write your message here…",
+                height=100,
+                label_visibility="collapsed",
+                key="fb_msg",
+            )
+            if st.button("Send", use_container_width=True, key="fb_send"):
+                if not msg.strip():
+                    st.warning("Please write a message first.")
+                else:
+                    ok, err = send_feedback(
+                        kind=kind,
+                        message=msg.strip(),
+                        user_email=_u["email"] if _u else "",
+                    )
+                    if ok:
+                        st.success("Sent! We'll get back to you soon.")
+                        st.session_state["fb_msg"] = ""
+                    else:
+                        st.error(f"Could not send: {err}")

@@ -1099,7 +1099,7 @@ with col_left:
         }
 
     _sigma_col = _sort_col_label if _sort_col_label in df_disp.columns else None
-    styled = df_disp.style.applymap(_style_sigma, subset=[_sigma_col]) if _sigma_col else df_disp.style
+    styled = df_disp.style.map(_style_sigma, subset=[_sigma_col]) if _sigma_col else df_disp.style
 
     _tbl_h = min(520, max(180, len(df_src) * 30 + 42))
 

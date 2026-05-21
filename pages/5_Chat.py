@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from lib.db import query_fresh, query
+from lib.db import query_fresh, query, LEAGUE_LABELS
 from lib.litellm_client import text_to_sql, fix_sql, summarise_stream
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
@@ -37,14 +37,56 @@ BLOCKED_KEYWORDS = [
     "alter", "truncate", "grant", "revoke",
 ]
 
-_STATIC_EXAMPLES = [
-    "Who are the top 10 scorers this season?",
-    "Which teams have the best power play percentage?",
-    "Show me Connor McDavid's last 10 games",
-    "What goalies have the best save percentage with 20+ games?",
-    "Which teams are on a winning streak right now?",
-    "Compare Boston and Toronto's goals for vs goals against",
-]
+_STATIC_EXAMPLES_BY_LEAGUE: dict[str, list[str]] = {
+    "nhl": [
+        "Who are the top 10 scorers this season?",
+        "Which teams have the best power play percentage?",
+        "Show me Connor McDavid's last 10 games",
+        "What goalies have the best save percentage with 20+ games?",
+        "Which teams are on a winning streak right now?",
+        "Compare Boston and Toronto's goals for vs goals against",
+    ],
+    "shl": [
+        "Who are the top scorers in Sweden this season?",
+        "Show the SHL standings",
+        "Which Swedish team has scored the most goals?",
+        "Top points leaders in SHL",
+        "Best goals per game in SHL",
+        "Player points per game in SHL",
+    ],
+    "nor": [
+        "Top goal scorers in Eliteserien",
+        "Current Eliteserien standings",
+        "Most goals scored in the latest season",
+        "Which team has the best home record?",
+        "Most penalties in Eliteserien this season",
+        "Top teams by goal differential",
+    ],
+    "sui": [
+        "Top scorers in Swiss hockey this season",
+        "Current Swiss league standings",
+        "Best goalie save percentage in Swiss hockey",
+        "Which team has scored the most goals?",
+        "Most recent Swiss league games",
+        "Top teams by power play percentage",
+    ],
+    "liiga": [
+        "Top goal scorers in Liiga",
+        "Liiga standings for the current season",
+        "Most goals in recent Liiga games",
+        "Which teams are at the top of Liiga?",
+        "Most goals scored by a team this season",
+        "Game results from the last week",
+    ],
+    "met": [
+        "Top scorers in Metal Ligaen",
+        "Current Metal Ligaen standings",
+        "Best goalie stats in Metal Ligaen",
+        "Which team has the most wins?",
+        "Recent Metal Ligaen results",
+        "Top teams by goal difference",
+    ],
+}
 
 _GREEN   = "#5a8f4e"
 _PALETTE = [_GREEN, "#87ceeb", "#f97316", "#c41e3a", "#a78bfa"]
@@ -93,10 +135,7 @@ st.markdown("""
 # ── Helper functions ───────────────────────────────────────────────────────────
 
 def _safe_sql(sql: str) -> tuple[bool, str]:
-    """Validate SQL safety; auto-append LIMIT 200 if missing.
-
-    Returns (is_safe, sql_or_error_message).
-    """
+    """Validate SQL safety; auto-append LIMIT 200 if missing."""
     stripped = sql.strip()
     if not stripped:
         return False, "Empty SQL returned by model."
@@ -117,7 +156,6 @@ def _error_card(message: str) -> str:
 
 
 def _looks_like_date(series: pd.Series) -> bool:
-    """Heuristic: does the first non-null value look like YYYY-MM-DD?"""
     try:
         sample = series.dropna().iloc[0]
         return bool(re.match(r"\d{4}-\d{2}-\d{2}", str(sample)))
@@ -134,7 +172,6 @@ def _try_chart(df: pd.DataFrame):
     if not num_cols:
         return None
 
-    # Detect date/time column
     date_col = next(
         (c for c in df.columns if c not in num_cols and (
             "date" in c.lower()
@@ -147,7 +184,6 @@ def _try_chart(df: pd.DataFrame):
     cat_cols = [c for c in df.columns if c not in num_cols and c != date_col]
 
     if date_col and len(df) >= 3:
-        # Line chart — time series
         color_by = (
             cat_cols[0]
             if len(cat_cols) == 1 and df[cat_cols[0]].nunique() <= 8
@@ -165,7 +201,6 @@ def _try_chart(df: pd.DataFrame):
         return fig
 
     if cat_cols and 2 <= len(df) <= 25 and df[cat_cols[0]].nunique() <= 25:
-        # Bar chart — categorical ranking
         fig = px.bar(
             df.sort_values(num_cols[0], ascending=False),
             x=cat_cols[0],
@@ -192,12 +227,16 @@ def _build_sql_history() -> list[tuple[str, str]]:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _fetch_dynamic_questions() -> list[str]:
-    """Generate contextual question suggestions from latest agent_insights."""
+def _fetch_dynamic_questions(league: str = "nhl") -> list[str]:
+    """Generate contextual question suggestions. NHL uses agent_insights; others use static list."""
+    static = _STATIC_EXAMPLES_BY_LEAGUE.get(league, _STATIC_EXAMPLES_BY_LEAGUE["nhl"])
+    if league != "nhl":
+        return static[:6]
     try:
         df = query(
             "SELECT entity_name, team_abbr, insight_type "
-            "FROM agent_insights ORDER BY ABS(zscore) DESC LIMIT 8"
+            "FROM agent_insights ORDER BY ABS(zscore) DESC LIMIT 8",
+            league="nhl",
         )
         questions: list[str] = []
         seen: set[str] = set()
@@ -216,15 +255,14 @@ def _fetch_dynamic_questions() -> list[str]:
                 questions.append(f"How has {team} been performing recently?")
             else:
                 questions.append(f"Tell me about {name}")
-        # Pad with static fallbacks
-        for q in _STATIC_EXAMPLES:
+        for q in static:
             if len(questions) >= 6:
                 break
             if q not in questions:
                 questions.append(q)
         return questions[:6]
     except Exception:
-        return _STATIC_EXAMPLES[:6]
+        return static[:6]
 
 
 def _render_message(msg: dict, key_suffix: str = "0") -> None:
@@ -272,6 +310,8 @@ def _render_message(msg: dict, key_suffix: str = "0") -> None:
 
 def _ask(question: str) -> None:
     """Core pipeline: question → SQL → execute → stream summary → store."""
+    active_league = st.session_state.get("active_league", "nhl")
+
     # ── Quota gate ─────────────────────────────────────────────────────────────
     remaining = ai_queries_remaining()
     if remaining <= 0:
@@ -293,7 +333,6 @@ def _ask(question: str) -> None:
         })
         return
 
-    # Append user message
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
@@ -308,7 +347,7 @@ def _ask(question: str) -> None:
         with st.spinner("Generating SQL…"):
             try:
                 history = _build_sql_history()
-                sql = text_to_sql(question, history)
+                sql = text_to_sql(question, history, league=active_league)
             except Exception as exc:
                 error = f"SQL generation failed: {exc}"
 
@@ -318,23 +357,23 @@ def _ask(question: str) -> None:
             if not ok:
                 error = result
             else:
-                sql = result  # may have LIMIT appended
+                sql = result
 
         # ── Phase 3: Execute ───────────────────────────────────────────────────
         if not error:
-            record_ai_query()  # count on each attempt that reaches the DB
+            record_ai_query()
             with st.spinner("Running query…"):
                 try:
-                    df = query_fresh(sql)
+                    df = query_fresh(sql, league=active_league)
                 except Exception as exec_err:
                     with st.spinner("Auto-fixing SQL…"):
                         try:
-                            fixed = fix_sql(question, sql, str(exec_err))
+                            fixed = fix_sql(question, sql, str(exec_err), league=active_league)
                             ok2, r2 = _safe_sql(fixed)
                             if not ok2:
                                 error = f"Auto-fix produced unsafe SQL: {r2}"
                             else:
-                                df = query_fresh(r2)
+                                df = query_fresh(r2, league=active_league)
                                 sql = r2
                         except Exception as fix_err:
                             error = (
@@ -357,11 +396,9 @@ def _ask(question: str) -> None:
                     f"<p class='row-count'>{len(df):,} row{'s' if len(df) != 1 else ''} returned</p>",
                     unsafe_allow_html=True,
                 )
-                # Stream summary — live text appears token by token
-                gen = summarise_stream(question, df.head(10).to_dict("records"))
+                gen = summarise_stream(question, df.head(10).to_dict("records"), league=active_league)
                 summary = st.write_stream(gen) or ""
 
-                # Auto-chart when data shape is chartable
                 fig = _try_chart(df)
                 if fig:
                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -381,7 +418,6 @@ def _ask(question: str) -> None:
             with st.expander("Show SQL", expanded=False):
                 st.code(sql, language="sql")
 
-        # Persist to history
         st.session_state.messages.append({
             "role": "assistant",
             "content": summary,
@@ -392,16 +428,18 @@ def _ask(question: str) -> None:
 
 
 # ── Page header ────────────────────────────────────────────────────────────────
+active_league = st.session_state.get("active_league", "nhl")
+league_label  = LEAGUE_LABELS.get(active_league, "NHL")
+
 header_col, clear_col = st.columns([6, 1])
 with header_col:
     st.markdown(
-        "<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>"
-        "Ask AI</h1>"
-        "<p style='color:#8896a8;font-size:13px;margin-bottom:6px;'>"
-        "Ask anything about NHL data — 16 seasons, 850K+ records</p>",
+        f"<h1 style='font-size:26px;font-weight:900;letter-spacing:-0.02em;margin-bottom:4px;'>"
+        f"Ask AI</h1>"
+        f"<p style='color:#8896a8;font-size:13px;margin-bottom:6px;'>"
+        f"Ask anything about {league_label} data in natural language</p>",
         unsafe_allow_html=True,
     )
-    # Quota display (hidden for unlimited plans)
     _remaining = ai_queries_remaining()
     if _remaining < 9999:
         _cls = "chat-quota-badge warn" if _remaining <= 3 else "chat-quota-badge"
@@ -420,7 +458,7 @@ with clear_col:
 clicked_example: str | None = None
 
 if not st.session_state.messages:
-    example_questions = _fetch_dynamic_questions()
+    example_questions = _fetch_dynamic_questions(active_league)
     st.markdown(
         "<p style='font-size:10px;font-weight:600;text-transform:uppercase;"
         "letter-spacing:0.08em;color:#8896a8;margin-bottom:10px;'>Try these</p>",
@@ -441,7 +479,7 @@ for i, msg in enumerate(st.session_state.messages):
         _render_message(msg, key_suffix=str(i))
 
 # ── Chat input ─────────────────────────────────────────────────────────────────
-question = st.chat_input("Ask a question about NHL data…") or clicked_example or _prefill_question
+question = st.chat_input(f"Ask a question about {league_label} data…") or clicked_example or _prefill_question
 
 if question:
     _ask(question)

@@ -13,6 +13,7 @@ st.set_page_config(page_title="Players – THA Analytics", page_icon="tha_icon.p
 _render_sidebar()
 require_login()
 
+# ── NHL: full rolling-stats view ──────────────────────────────────────────────
 page_header("Players", "Current season · 5-game momentum vs 20-game baseline", data_date=get_data_date())
 zscore_legend()
 

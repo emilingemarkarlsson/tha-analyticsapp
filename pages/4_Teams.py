@@ -14,6 +14,7 @@ st.set_page_config(page_title="Teams – THA Analytics", page_icon="tha_icon.png
 _render_sidebar()
 require_login()
 
+# ── NHL: full team dashboard ──────────────────────────────────────────────────
 # Handle inbound navigation from Standings / Players via query params
 _team_param = st.query_params.get("team")
 if _team_param:

@@ -24,6 +24,9 @@ PLANS: dict[str, int] = {
     "base": 1,
     "plus": 2,
     "club": 3,
+    # DB plan names (Coolify Postgres)
+    "pro":  2,   # pro = plus level
+    "team": 3,   # team = club level
 }
 
 PLAN_LABELS: dict[str, str] = {
@@ -31,6 +34,8 @@ PLAN_LABELS: dict[str, str] = {
     "base": "Base",
     "plus": "Plus",
     "club": "Club",
+    "pro":  "Pro",
+    "team": "Team",
 }
 
 PLAN_PRICES: dict[str, str] = {
@@ -38,6 +43,8 @@ PLAN_PRICES: dict[str, str] = {
     "base": "9 SEK/mån",
     "plus": "39 SEK/mån",
     "club": "På förfrågan",
+    "pro":  "199 SEK/mån",
+    "team": "499 SEK/mån",
 }
 
 PLAN_COLORS: dict[str, str] = {
@@ -45,6 +52,8 @@ PLAN_COLORS: dict[str, str] = {
     "base": "#5a8f4e",
     "plus": "#f97316",
     "club": "#87ceeb",
+    "pro":  "#f97316",
+    "team": "#87ceeb",
 }
 
 # ── Feature matrix ─────────────────────────────────────────────────────────────
@@ -67,8 +76,6 @@ FEATURES: dict[str, str] = {
     "ai_chat_unlimited":        "plus",
     # Export
     "export_csv":               "plus",
-    # Leagues
-    "league_shl":               "plus",
     # API / Club
     "api_access":               "club",
     "scouting_notes":           "club",

@@ -17,7 +17,7 @@ _render_sidebar()
 require_login()
 
 from lib.db import query, get_data_date
-from lib.components import data_source_footer, zscore_legend
+from lib.components import data_source_footer, zscore_legend, page_header
 
 INSIGHT_COLORS: dict[str, str] = {
     "hot_streak": "#f97316",
@@ -42,7 +42,6 @@ FILTER_GROUPS: dict[str, list[str]] = {
     "Goalies": ["goalie_hot", "goalie_cold"],
 }
 
-from lib.components import page_header
 page_header("Intelligence Feed", "AI-generated insights · updated daily", data_date=get_data_date())
 
 # ── First-visit welcome card ───────────────────────────────────────────────

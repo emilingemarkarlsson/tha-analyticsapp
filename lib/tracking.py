@@ -1,10 +1,10 @@
-"""Umami analytics – injects tracking script via st.components.v1.html(height=0).
+"""Umami analytics – injects tracking script via st.html(unsafe_allow_javascript=True).
 
 Called once from sidebar.render() so every page is covered automatically.
 Auto-detects page name from the running script path.
 """
 import os
-import streamlit.components.v1 as components
+import streamlit as st
 
 _SCRIPT_URL = "https://umami.theunnamedroads.com/script.js"
 _WEBSITE_ID = "ec05cc8e-e3f0-4955-88df-14a8a68318f4"
@@ -48,8 +48,8 @@ def inject() -> None:
     """Inject Umami pageview tracker. Call from sidebar.render()."""
     slug, title = _current_page()
     # data-auto-track="false" — we fire one manual track() call with the
-    # correct page slug instead of letting Umami use the iframe URL.
-    components.html(
+    # correct page slug instead of letting Umami use the page URL.
+    st.html(
         f"""
 <script>
 (function() {{
@@ -74,5 +74,5 @@ def inject() -> None:
 }})();
 </script>
 """,
-        height=0,
+        unsafe_allow_javascript=True,
     )

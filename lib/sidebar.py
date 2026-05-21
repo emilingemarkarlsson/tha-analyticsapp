@@ -1,6 +1,8 @@
 """Shared sidebar and global CSS – call render() on every page."""
 import streamlit as st
 
+_LEAGUE_LABELS: dict[str, str] = {"nhl": "NHL"}
+
 
 def render() -> None:
     """Inject global CSS and render sidebar navigation."""
@@ -126,7 +128,7 @@ def render() -> None:
         # ── Logo ──────────────────────────────────────────────────────────────
         st.markdown(
             """
-            <div style="margin-top:-24px; padding-bottom:24px; border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom:16px;">
+            <div style="margin-top:-24px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom:16px;">
               <div style="display:flex; align-items:center; gap:9px;">
                 <div style="background:#5a8f4e; border-radius:5px; width:30px; height:30px;
                             display:flex; align-items:center; justify-content:center;
@@ -190,7 +192,7 @@ def render() -> None:
         st.page_link("pages/10_Account.py", label="My Account", icon=":material/manage_accounts:")
 
         st.markdown(
-            "<hr style='border-color:rgba(255,255,255,0.08);margin:16px 0;'>",
+            "<hr style='border-color:rgba(255,255,255,0.08);margin:12px 0 8px;'>",
             unsafe_allow_html=True,
         )
 
@@ -213,11 +215,12 @@ def render() -> None:
         # ── Data status widget ─────────────────────────────────────────────────
         try:
             from lib.db import get_data_date
-            data_date = get_data_date()
+            data_date = get_data_date("nhl")
         except Exception:
             data_date = "—"
 
         status_color = "#5a8f4e" if data_date != "—" else "#f97316"
+        league_display = "NHL"
         st.markdown(
             f"""
             <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
@@ -233,9 +236,9 @@ def render() -> None:
                 <span style="color:#8896a8;font-size:10px;font-family:monospace;">{data_date}</span>
               </div>
               <div style="color:#8896a8; font-size:11px; line-height:1.5;">
-                16 seasons · 850K+ records<br>
+                {league_display} data<br>
                 <span style="color:rgba(255,255,255,0.3);font-size:10px;">
-                  Updated daily · NHL Stats API
+                  Updated daily
                 </span>
               </div>
             </div>

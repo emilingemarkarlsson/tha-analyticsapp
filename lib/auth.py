@@ -1,7 +1,12 @@
-"""Supabase auth helpers – call require_login() at top of every protected page."""
+"""PostgreSQL auth helpers — bcrypt + session tokens. Call require_login() at top of every protected page."""
 import os
+import secrets
+import hashlib
+import datetime
 import streamlit as st
-from supabase import create_client, Client
+import psycopg2
+import psycopg2.extras
+import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,17 +14,18 @@ load_dotenv()
 _COOKIE_KEY = "tha_auth"
 
 
-@st.cache_resource(show_spinner=False)
-def _get_client() -> Client:
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_ANON_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL or SUPABASE_ANON_KEY not set")
-    return create_client(url, key)
+def _conn():
+    return psycopg2.connect(
+        host=os.environ["PG_HOST"],
+        port=int(os.environ.get("PG_PORT", "5432")),
+        dbname=os.environ["PG_DB"],
+        user=os.environ["PG_USER"],
+        password=os.environ["PG_PASSWORD"],
+        connect_timeout=5,
+    )
 
 
 def _cc():
-    """Return a fresh CookieController each render (component must re-mount per page load)."""
     from streamlit_cookies_controller import CookieController
     return CookieController(key="tha_cc")
 
@@ -29,40 +35,75 @@ def get_user() -> dict | None:
     return st.session_state.get("sb_user")
 
 
-def require_login() -> dict:
-    """Restore session from cookie if needed, redirect to login if unauthenticated.
+def _verify_session_token(raw_token: str) -> dict | None:
+    """Validate token against sessions table; return user dict or None."""
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    try:
+        with _conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT u.id, u.email, u.full_name, u.created_at
+                    FROM sessions s
+                    JOIN users u ON u.id = s.user_id
+                    WHERE s.token_hash = %s AND s.expires_at > NOW() AND u.is_active = TRUE
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+                if row:
+                    cur.execute(
+                        "UPDATE users SET last_login_at = NOW() WHERE id = %s",
+                        (str(row["id"]),),
+                    )
+                return dict(row) if row else None
+    except Exception:
+        return None
 
-    Uses a two-pass pattern: on first render the CookieController component loads
-    and st.stop() lets Streamlit wait for the JS round-trip. On the second render
-    the cookie value is available.
+
+def _create_session(user_id: str) -> str:
+    """Insert a session row; return the raw token to store in cookie."""
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO sessions (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
+                (user_id, token_hash, expires),
+            )
+    return raw_token
+
+
+def require_login() -> dict:
+    """Restore session from cookie if needed; redirect to login if unauthenticated.
+
+    Uses the two-pass pattern: first render the CookieController component loads
+    (st.stop()), second render the cookie value is available.
     """
     if get_user():
         return get_user()
 
     try:
         cc = _cc()
-        token_data = cc.get(_COOKIE_KEY)
+        raw_token = cc.get(_COOKIE_KEY)
 
-        if token_data is None:
-            # Component hasn't responded yet (first render after session reset).
-            # st.stop() holds this render; Streamlit reruns automatically when
-            # the JS component sends back the cookie value.
+        if raw_token is None:
             if not st.session_state.get("_cc_waited"):
                 st.session_state["_cc_waited"] = True
                 st.stop()
-            # Second render: still None means genuinely no cookie → fall through
+            # Second render — genuinely no cookie → fall through to redirect
         else:
             st.session_state["_cc_waited"] = False
-            if "|||" in str(token_data):
-                access_token, refresh_token = str(token_data).split("|||", 1)
-                res = _get_client().auth.set_session(access_token, refresh_token)
-                if res.user:
-                    st.session_state["sb_user"] = {
-                        "id": res.user.id,
-                        "email": res.user.email,
-                        "created_at": str(res.user.created_at),
-                    }
-                    st.rerun()  # Rerender with auth set
+            user = _verify_session_token(str(raw_token))
+            if user:
+                st.session_state["sb_user"] = {
+                    "id": str(user["id"]),
+                    "email": user["email"],
+                    "full_name": user.get("full_name") or "",
+                    "created_at": str(user["created_at"]),
+                }
+                st.rerun()
     except Exception:
         pass
 
@@ -74,53 +115,93 @@ def require_login() -> dict:
 def sign_in(email: str, password: str) -> tuple[bool, str]:
     """Sign in with email + password. Returns (success, error_message)."""
     try:
-        sb = _get_client()
-        res = sb.auth.sign_in_with_password({"email": email, "password": password})
+        with _conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, email, password_hash, full_name, is_active, created_at FROM users WHERE email = %s",
+                    (email.lower().strip(),),
+                )
+                row = cur.fetchone()
+
+        if not row:
+            return False, "Invalid email or password."
+        if not row["is_active"]:
+            return False, "Account is disabled."
+        if not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+            return False, "Invalid email or password."
+
+        user_id = str(row["id"])
+        raw_token = _create_session(user_id)
+
         st.session_state["sb_user"] = {
-            "id": res.user.id,
-            "email": res.user.email,
-            "created_at": str(res.user.created_at),
+            "id": user_id,
+            "email": row["email"],
+            "full_name": row.get("full_name") or "",
+            "created_at": str(row["created_at"]),
         }
-        st.session_state["sb_session"] = res.session.access_token
         try:
-            _cc().set(_COOKIE_KEY,
-                      f"{res.session.access_token}|||{res.session.refresh_token}",
-                      max_age=60 * 60 * 24 * 30)  # 30 days
+            _cc().set(_COOKIE_KEY, raw_token, max_age=60 * 60 * 24 * 30)
         except Exception:
             pass
         return True, ""
     except Exception as e:
-        msg = str(e)
-        if "Invalid login" in msg or "invalid_credentials" in msg:
-            return False, "Invalid email or password."
-        return False, f"Sign-in error: {msg}"
+        return False, f"Sign-in error: {e}"
 
 
-def sign_up(email: str, password: str) -> tuple[bool, str]:
+def sign_up(email: str, password: str, full_name: str = "") -> tuple[bool, str]:
     """Create a new account. Returns (success, error_message)."""
+    if len(password) < 6:
+        return False, "Password must be at least 6 characters."
     try:
-        sb = _get_client()
-        res = sb.auth.sign_up({"email": email, "password": password})
-        if res.user and res.user.identities == []:
-            return False, "That email address is already registered."
+        pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        with _conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (email, password_hash, full_name) VALUES (%s, %s, %s)",
+                    (email.lower().strip(), pw_hash, full_name or None),
+                )
+        return True, ""
+    except psycopg2.errors.UniqueViolation:
+        return False, "That email address is already registered."
+    except Exception as e:
+        return False, f"Sign-up error: {e}"
+
+
+def change_password(user_id: str, new_password: str) -> tuple[bool, str]:
+    """Update password for an authenticated user."""
+    if len(new_password) < 6:
+        return False, "Password must be at least 6 characters."
+    try:
+        pw_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+        with _conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET password_hash = %s WHERE id = %s",
+                    (pw_hash, user_id),
+                )
         return True, ""
     except Exception as e:
-        msg = str(e)
-        if "Password should be" in msg:
-            return False, "Password must be at least 6 characters."
-        return False, f"Sign-up error: {msg}"
+        return False, f"Error: {e}"
 
 
 def sign_out() -> None:
-    """Sign out and clear session."""
+    """Sign out, delete session from DB, clear cookie and session_state."""
+    raw_token = None
     try:
-        _get_client().auth.sign_out()
+        cc = _cc()
+        raw_token = cc.get(_COOKIE_KEY)
+        cc.remove(_COOKIE_KEY)
     except Exception:
         pass
-    try:
-        _cc().remove(_COOKIE_KEY)
-    except Exception:
-        pass
+
+    if raw_token:
+        try:
+            token_hash = hashlib.sha256(str(raw_token).encode()).hexdigest()
+            with _conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM sessions WHERE token_hash = %s", (token_hash,))
+        except Exception:
+            pass
+
     st.session_state.pop("sb_user", None)
-    st.session_state.pop("sb_session", None)
     st.session_state.pop("_cc_waited", None)

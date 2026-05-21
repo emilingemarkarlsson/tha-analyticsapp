@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
-from lib.auth import require_login, sign_out, _get_client
+from lib.auth import require_login, sign_out
 from lib.sidebar import render as _render_sidebar
 from lib.components import page_header, data_source_footer
 from lib.entitlements import (
@@ -181,11 +181,12 @@ with col:
         elif len(new_pw) < 6:
             st.error("Lösenordet måste vara minst 6 tecken.")
         else:
-            try:
-                _get_client().auth.update_user({"password": new_pw})
+            from lib.auth import change_password
+            ok, err = change_password(uid, new_pw)
+            if ok:
                 st.success("Lösenord uppdaterat.")
-            except Exception as e:
-                st.error(f"Fel: {e}")
+            else:
+                st.error(err)
 
 st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
 

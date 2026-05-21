@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
-from lib.auth import sign_in, sign_up, get_user, _get_client
+from lib.auth import sign_in, sign_up, get_user
 
 st.set_page_config(page_title="Login – THA Analytics", page_icon="tha_icon.png", layout="wide", initial_sidebar_state="expanded")
 
@@ -281,12 +281,7 @@ div[data-testid="stTabs"] [role="tablist"] {
             if not reset_email:
                 st.error("Please enter your email address.")
             else:
-                try:
-                    _get_client().auth.reset_password_email(reset_email)
-                    st.success("Reset link sent — check your inbox.")
-                    st.session_state.pop("auth_mode", None)
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                st.info("Password reset is not yet available. Contact support.")
     elif qp.get("mode") == "forgot" or st.session_state.get("auth_tab") == 2:
         st.session_state["auth_mode"] = "forgot"
         st.rerun()

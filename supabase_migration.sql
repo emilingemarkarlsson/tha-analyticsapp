@@ -1,3 +1,10 @@
+-- DEPRECATED: This file uses the old Supabase schema (user_id TEXT, plan TEXT).
+-- It is kept for reference only. Use pg_schema.sql for the current PostgreSQL deployment.
+-- The auth system was migrated from Supabase to custom PostgreSQL on 2026-05-21.
+
+-- Original Supabase schema below (DO NOT apply to the Coolify PostgreSQL):
+-- ─────────────────────────────────────────────────────────────────────────────
+
 -- THA Analytics – Supabase migration
 -- Run this in: Supabase dashboard → SQL Editor → New query
 -- https://supabase.com/dashboard/project/<your-project>/sql
@@ -53,12 +60,3 @@ CREATE TABLE IF NOT EXISTS roster_players (
     UNIQUE (roster_id, player_id)
 );
 
--- ── Row Level Security (disabled – app uses service key) ───────────────────────
--- Tables are accessed only via the service role key from the backend,
--- so RLS is not needed. Enable and add policies if you ever expose these
--- tables directly to the Supabase JS client in a frontend.
-ALTER TABLE users          DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_usage       DISABLE ROW LEVEL SECURITY;
-ALTER TABLE watchlist      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE rosters        DISABLE ROW LEVEL SECURITY;
-ALTER TABLE roster_players DISABLE ROW LEVEL SECURITY;

@@ -11,6 +11,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+from lib.migrate import ensure_schema
+ensure_schema()
+
 from lib.sidebar import render as _render_sidebar
 from lib.auth import require_login
 _render_sidebar()

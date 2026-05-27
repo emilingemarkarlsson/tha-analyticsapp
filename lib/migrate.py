@@ -17,19 +17,31 @@ def ensure_schema() -> None:
         )
         with conn:
             with conn.cursor() as cur:
+                # Check for the NEW schema by looking for the password_hash column.
+                # The old Supabase schema has a 'users' table but no 'password_hash'
+                # column, so checking table existence alone is insufficient.
                 cur.execute("""
                     SELECT EXISTS (
-                        SELECT FROM information_schema.tables
-                        WHERE table_schema = 'public' AND table_name = 'users'
+                        SELECT FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'users'
+                          AND column_name = 'password_hash'
                     )
                 """)
-                exists = cur.fetchone()[0]
-                if not exists:
+                new_schema_present = cur.fetchone()[0]
+                if not new_schema_present:
+                    # Old Supabase schema detected (or empty DB). Drop stale tables
+                    # so CREATE TABLE IF NOT EXISTS in pg_schema.sql recreates them
+                    # with the correct columns.
+                    cur.execute(
+                        "DROP TABLE IF EXISTS roster_players, rosters, watchlist,"
+                        " ai_usage, sessions, users, plans CASCADE"
+                    )
                     schema_path = Path(__file__).parent.parent / "pg_schema.sql"
                     cur.execute(schema_path.read_text())
-                    print("[migrate] schema applied")
+                    print("[migrate] schema applied (replaced old Supabase schema)")
                 else:
-                    print("[migrate] schema already present")
+                    print("[migrate] new schema already present")
         conn.close()
     except Exception as e:
         print(f"[migrate] error: {e}")
